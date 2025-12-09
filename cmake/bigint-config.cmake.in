@@ -1,0 +1,6 @@
+@PACKAGE_INIT@
+
+include("${CMAKE_CURRENT_LIST_DIR}/bigint-targets.cmake")
+
+check_required_components(bigint)
+
