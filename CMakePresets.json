@@ -1,0 +1,89 @@
+{
+    "version": 6,
+    "cmakeMinimumRequired": {
+        "major": 3,
+        "minor": 21,
+        "patch": 0
+    },
+    "configurePresets": [
+        {
+            "name": "base",
+            "hidden": true,
+            "binaryDir": "${sourceDir}/build/${presetName}",
+            "installDir": "${sourceDir}/install/${presetName}",
+            "cacheVariables": {
+                "CMAKE_CXX_STANDARD": "20",
+                "CMAKE_CXX_STANDARD_REQUIRED": "ON",
+                "CMAKE_CXX_EXTENSIONS": "OFF"
+            }
+        },
+        {
+            "name": "windows-base",
+            "hidden": true,
+            "inherits": "base",
+            "condition": {
+                "type": "equals",
+                "lhs": "${hostSystemName}",
+                "rhs": "Windows"
+            },
+            "generator": "Visual Studio 17 2022",
+            "architecture": {
+                "value": "x64",
+                "strategy": "set"
+            }
+        },
+        {
+            "name": "dev",
+            "displayName": "Development",
+            "description": "Development build with tests and benchmarks",
+            "inherits": "windows-base",
+            "cacheVariables": {
+                "BIGINT_BUILD_TESTS": "ON",
+                "BIGINT_BUILD_BENCHMARKS": "ON"
+            }
+        },
+        {
+            "name": "release",
+            "displayName": "Release",
+            "description": "Release build without tests",
+            "inherits": "windows-base",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release",
+                "BIGINT_BUILD_TESTS": "OFF",
+                "BIGINT_BUILD_BENCHMARKS": "OFF"
+            }
+        }
+    ],
+    "buildPresets": [
+        {
+            "name": "dev-debug",
+            "displayName": "Debug",
+            "configurePreset": "dev",
+            "configuration": "Debug"
+        },
+        {
+            "name": "dev-release",
+            "displayName": "Release",
+            "configurePreset": "dev",
+            "configuration": "Release"
+        },
+        {
+            "name": "release",
+            "displayName": "Release",
+            "configurePreset": "release",
+            "configuration": "Release"
+        }
+    ],
+    "testPresets": [
+        {
+            "name": "dev",
+            "displayName": "Run Tests",
+            "configurePreset": "dev",
+            "configuration": "Release",
+            "output": {
+                "outputOnFailure": true
+            }
+        }
+    ]
+}
+
