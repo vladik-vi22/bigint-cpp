@@ -158,10 +158,6 @@ BigInt::BigInt(const int32_t bigIntInt32_t)
     positive = (bigIntInt32_t >= 0);
 }
 
-BigInt::~BigInt()
-{
-}
-
 BigInt& BigInt::operator = (const BigInt& equal)
 {
     vectorUint32_t = equal.vectorUint32_t;

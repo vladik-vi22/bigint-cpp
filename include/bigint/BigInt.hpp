@@ -44,7 +44,7 @@ public:
     explicit BigInt(uint32_t bigIntUint64_t, bool isPositive = true);
     explicit BigInt(int64_t bigIntInt64_t);
     explicit BigInt(int32_t bigIntInt32_t);
-    ~BigInt();
+    ~BigInt() = default;
 
     BigInt& operator = (const BigInt& equal); // simple assignment
 
@@ -93,8 +93,8 @@ public:
     BigInt operator >> (size_t shift) const; // bitwise right shift
     BigInt& operator >>= (size_t shift); // bitwise right shift assignment
 
-    BigInt leftCircularShift(size_t shift) const; // bitwise left circular shift
-    BigInt rightCircularShift(size_t shift) const; // bitwise right circular shift;
+    [[nodiscard]] BigInt leftCircularShift(size_t shift) const; // bitwise left circular shift
+    [[nodiscard]] BigInt rightCircularShift(size_t shift) const; // bitwise right circular shift;
 
     bool operator !() const; // negation
     bool operator && (const BigInt& rightAND) const; // AND
