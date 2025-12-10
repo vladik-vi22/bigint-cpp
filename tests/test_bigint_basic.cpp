@@ -58,6 +58,6 @@ TEST_F(BigIntBasicTest, IsEvenOdd) {
 
 TEST_F(BigIntBasicTest, BitLength) {
     BigInt num("255", 10);  // 11111111 in binary = 8 bits
-    EXPECT_EQ(num.bitLenght(), 8);
+    EXPECT_EQ(num.bitLength(), 8);
 }
 

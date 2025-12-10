@@ -1,14 +1,12 @@
-﻿#include <bigint/BigInt.hpp>
+#include <bigint/BigInt.hpp>
+
+#include <algorithm>
+#include <bitset>
+#include <cmath>
+#include <iomanip>
+#include <sstream>
 
 namespace bigint {
-
-const uint8_t BigInt::baseBinary = 2;
-const uint8_t BigInt::baseDecimal = 10;
-const uint8_t BigInt::baseHexadecimal = 16;
-const uint64_t BigInt::basisCalcSys = 4294967296;  // 2^32
-
-uint8_t BigInt::baseInput = baseDecimal;
-uint8_t BigInt::baseOutput = baseDecimal;
 
 BigInt::BigInt()
 {
@@ -233,7 +231,7 @@ BigInt& BigInt::operator += (const BigInt& augend)
 
 BigInt& BigInt::operator ++()
 {
-    *this += constants::ONE;
+    *this += constants::One;
     return *this;
 }
 
@@ -325,7 +323,7 @@ BigInt& BigInt::operator -= (const BigInt& subtrahend)
 
 BigInt& BigInt::operator -- ()
 {
-    *this -= constants::ONE;
+    *this -= constants::One;
     return *this;
 }
 
@@ -383,23 +381,23 @@ BigInt& BigInt::operator *= (const BigInt& multiplier)
 
 std::pair<BigInt, BigInt> BigInt::DivMod(const BigInt& divisor) const
 {
-    const size_t bitLenghtDivisor = divisor.bitLenght();
+    const size_t bitLengthDivisor = divisor.bitLength();
     BigInt fraction(0);
     BigInt remainder(abs(*this));
     BigInt borrow;
-    size_t differenceRemainderNDivisorBitLenght;
+    size_t differenceRemainderNDivisorbitLength;
     fraction.vectorUint32_t.reserve(vectorUint32_t.size());
     while(remainder >= abs(divisor))
     {
-        differenceRemainderNDivisorBitLenght = remainder.bitLenght() - bitLenghtDivisor;
-        borrow = abs(divisor) << differenceRemainderNDivisorBitLenght;
+        differenceRemainderNDivisorbitLength = remainder.bitLength() - bitLengthDivisor;
+        borrow = abs(divisor) << differenceRemainderNDivisorbitLength;
         if(remainder < borrow)
         {
             borrow >>= 1;
-            --differenceRemainderNDivisorBitLenght;
+            --differenceRemainderNDivisorbitLength;
         }
         remainder -= borrow;
-        fraction += constants::ONE << differenceRemainderNDivisorBitLenght; // 1 << n = 2 ^ n
+        fraction += constants::One << differenceRemainderNDivisorbitLength; // 1 << n = 2 ^ n
     }
     fraction.positive = positive == divisor.positive;
     remainder.positive = positive;
@@ -439,11 +437,11 @@ BigInt pow(const BigInt& base, const BigInt& exponent)
 {
     if(!exponent.positive)
     {
-        return constants::ZERO;
+        return constants::Zero;
     }
     BigInt power(1);
     power.vectorUint32_t.reserve(base.vectorUint32_t.size() * static_cast<size_t>(exponent));
-    for(size_t indexBitExponent = exponent.bitLenght() - 1; indexBitExponent > 0; --indexBitExponent)
+    for(size_t indexBitExponent = exponent.bitLength() - 1; indexBitExponent > 0; --indexBitExponent)
     {
         if(exponent.vectorUint32_t[indexBitExponent >> 5] & (1 << (indexBitExponent & 31)))
         {
@@ -464,7 +462,7 @@ BigInt pow(const BigInt& base, const BigInt& exponent)
 
 size_t log2(const BigInt& antilogarithm)
 {
-    return antilogarithm.bitLenght() - 1;
+    return antilogarithm.bitLength() - 1;
 }
 
 /*BigInt powmod(BigInt base, const BigInt& exponent, const BigInt& divisor)
@@ -472,8 +470,8 @@ size_t log2(const BigInt& antilogarithm)
     BigInt power(1);
     power.vectorUint32_t.reserve(divisor.vectorUint32_t.size());
     const BigInt mu = power.shiftDigitsToHigh(divisor.vectorUint32_t.size() * 2) / divisor;
-    const uint32_t bitLenghtExponent = exponent.bitLenght();
-    for(size_t indexBitExponent = 0; indexBitExponent < bitLenghtExponent; ++indexBitExponent)
+    const uint32_t bitLengthExponent = exponent.bitLength();
+    for(size_t indexBitExponent = 0; indexBitExponent < bitLengthExponent; ++indexBitExponent)
     {
         if(exponent.vectorUint32_t[indexBitExponent >> 5] & (1 << (indexBitExponent & 31)))
         {
@@ -488,7 +486,7 @@ BigInt powmod(const BigInt& base, const BigInt& exponent, const BigInt& divisor)
 {
     BigInt power(1);
     power.vectorUint32_t.reserve(divisor.vectorUint32_t.size());
-    const size_t bitLen = exponent.bitLenght();
+    const size_t bitLen = exponent.bitLength();
     for(size_t i = 0; i < bitLen; ++i)
     {
         size_t indexBitExponent = bitLen - 1 - i;
@@ -505,14 +503,14 @@ BigInt inversemod(BigInt dividend, const BigInt& divisor)
 {
     if(!divisor || !isCoprime(dividend, divisor))
     {
-        return constants::ZERO;
+        return constants::Zero;
     }
     BigInt divisor_copy(divisor);
     BigInt fraction;
     BigInt x0(0);
     BigInt x1(1);
     BigInt x_temp;
-    while(dividend > constants::ONE)
+    while(dividend > constants::One)
     {
         fraction = dividend / divisor_copy;
         x_temp = divisor_copy;
@@ -554,7 +552,7 @@ bool congruencemod(const BigInt& dividend1, const BigInt& dividend2, const BigIn
 
 bool isCoprime(const BigInt& bigInt1, const BigInt& bigInt2)
 {
-    return gcd(bigInt1, bigInt2) == constants::ONE;
+    return gcd(bigInt1, bigInt2) == constants::One;
 }
 
 int8_t symbolJacobi(BigInt bigInt1, BigInt bigInt2)
@@ -569,7 +567,7 @@ int8_t symbolJacobi(BigInt bigInt1, BigInt bigInt2)
     if(!bigInt1.positive)
     {
         bigInt1.positive = true;
-        if(bigInt2 % constants::FOUR == constants::THREE)
+        if(bigInt2 % constants::Four == constants::Three)
         {
             symbolJacobi = -symbolJacobi;
         }
@@ -584,12 +582,12 @@ int8_t symbolJacobi(BigInt bigInt1, BigInt bigInt2)
         }
         if(iterator % 2)
         {
-            if(bigInt2 % constants::EIGHT == constants::THREE || bigInt2 % constants::EIGHT == constants::FIVE)
+            if(bigInt2 % constants::Eight == constants::Three || bigInt2 % constants::Eight == constants::Five)
             {
                 symbolJacobi = -symbolJacobi;
             }
         }
-        if(bigInt1 % constants::FOUR == constants::THREE && bigInt2 % constants::FOUR == constants::THREE)
+        if(bigInt1 % constants::Four == constants::Three && bigInt2 % constants::Four == constants::Three)
         {
             symbolJacobi = -symbolJacobi;
         }
@@ -602,7 +600,7 @@ int8_t symbolJacobi(BigInt bigInt1, BigInt bigInt2)
 
 BigInt BigInt::operator ~() const
 {
-    return -*this - constants::ONE;
+    return -*this - constants::One;
 }
 
 BigInt BigInt::operator & (const BigInt& rightBitwiseAND) const
@@ -624,15 +622,15 @@ BigInt BigInt::operator & (const BigInt& rightBitwiseAND) const
     }
     else if(!positive && !rightBitwiseAND.positive)
     {
-        return -(~*this | ~rightBitwiseAND) - constants::ONE;
+        return -(~*this | ~rightBitwiseAND) - constants::One;
     }
     else if(positive && !rightBitwiseAND.positive)
     {
-        return (*this | ~rightBitwiseAND) + rightBitwiseAND + constants::ONE;
+        return (*this | ~rightBitwiseAND) + rightBitwiseAND + constants::One;
     }
     else // !positive && rightBitwiseAnd.positive
     {
-        return (~*this | rightBitwiseAND) + *this + constants::ONE;
+        return (~*this | rightBitwiseAND) + *this + constants::One;
     }
 }
 
@@ -669,7 +667,7 @@ BigInt BigInt::operator | (const BigInt& rightBitwiseOR) const
     }
     else if(!positive && !rightBitwiseOR.positive)
     {
-        return -(~*this & ~rightBitwiseOR) - constants::ONE;
+        return -(~*this & ~rightBitwiseOR) - constants::One;
     }
     else if(positive && !rightBitwiseOR.positive)
     {
@@ -780,10 +778,11 @@ BigInt BigInt::operator >> (const size_t shift) const
         shifted.vectorUint32_t.reserve(vectorUint32_t.size());
         uint32_t carry = 0;
         uint32_t shifted_temp = 0;
+        const uint32_t mask = (1ULL << shift) - 1;  // Mask for lowest 'shift' bits
         for(std::vector<uint32_t>::const_reverse_iterator iteratorShifting = vectorUint32_t.crbegin(); iteratorShifting != vectorUint32_t.crend(); ++iteratorShifting)
         {
             shifted_temp = (*iteratorShifting >> shift) | carry;
-            carry = (*iteratorShifting & 1) << (32 - shift);
+            carry = (*iteratorShifting & mask) << (32 - shift);
             shifted.vectorUint32_t.emplace(shifted.vectorUint32_t.begin(), shifted_temp);
         }
         shifted.deleteZeroHighOrderDigit();
@@ -810,14 +809,14 @@ BigInt& BigInt::operator >>= (const size_t shift)
 
 BigInt BigInt::leftCircularShift(const size_t shift) const
 {
-    const BigInt mask(--(constants::ONE << bitLenght()));
-    return (((*this << shift) | (*this >> (bitLenght() - shift))) & mask);
+    const BigInt mask(--(constants::One << bitLength()));
+    return (((*this << shift) | (*this >> (bitLength() - shift))) & mask);
 }
 
 BigInt BigInt::rightCircularShift(const size_t shift) const
 {
-    const BigInt mask(--(constants::ONE << bitLenght()));
-    return (((*this >> shift) | (*this << (bitLenght() - shift))) & mask);
+    const BigInt mask(--(constants::One << bitLength()));
+    return (((*this >> shift) | (*this << (bitLength() - shift))) & mask);
 }
 
 bool BigInt::operator !() const
@@ -1076,7 +1075,7 @@ std::vector<uint32_t> BigInt::toStdVectorUint32_t() const
 std::vector<uint8_t> BigInt::toStdVectorUint8_t() const
 {
     std::vector<uint8_t> stdVectorUint8_t;
-    size_t numberOfBytes = byteLenght();
+    size_t numberOfBytes = byteLength();
     stdVectorUint8_t.reserve(numberOfBytes);
     std::vector<uint32_t>::const_reverse_iterator iterator = vectorUint32_t.crbegin();
     if(numberOfBytes % sizeof(uint32_t))
@@ -1137,40 +1136,45 @@ BigInt::operator bool() const
     return false;
 }
 
-size_t BigInt::bitLenght() const
+size_t BigInt::bitLength() const
 {
     if(!(*this))
     {
         return 1;
     }
-    size_t bitLenght = (vectorUint32_t.size() - 1) * sizeof(uint32_t) * 8;
+    size_t len = (vectorUint32_t.size() - 1) * sizeof(uint32_t) * 8;
     uint32_t highOrderDigit = vectorUint32_t.back();
-    uint8_t bitLenghtHighOrderDigit = 0;
+    uint8_t highOrderBits = 0;
     while(highOrderDigit)
     {
         highOrderDigit >>= 1;
-        ++bitLenghtHighOrderDigit;
+        ++highOrderBits;
     }
-    bitLenght += bitLenghtHighOrderDigit;
-    return bitLenght;
+    len += highOrderBits;
+    return len;
 }
 
-size_t BigInt::byteLenght() const
+size_t BigInt::byteLength() const
 {
     if(!(*this))
     {
         return 1;
     }
-    size_t byteLenght = (vectorUint32_t.size() - 1) * sizeof(uint32_t);
+    size_t len = (vectorUint32_t.size() - 1) * sizeof(uint32_t);
     uint32_t highOrderDigit = vectorUint32_t.back();
-    uint8_t byteLenghtHighOrderDigit = 0;
+    uint8_t highOrderBytes = 0;
     while(highOrderDigit)
     {
         highOrderDigit >>= 8;
-        ++byteLenghtHighOrderDigit;
+        ++highOrderBytes;
     }
-    byteLenght += byteLenghtHighOrderDigit;
-    return byteLenght;
+    len += highOrderBytes;
+    return len;
+}
+
+bool BigInt::isZero() const
+{
+    return vectorUint32_t.empty() || (vectorUint32_t.size() == 1 && vectorUint32_t[0] == 0);
 }
 
 bool BigInt::isEven() const

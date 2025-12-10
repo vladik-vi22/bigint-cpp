@@ -1,26 +1,26 @@
-#ifndef BIGINT_BIGINT_HPP
-#define BIGINT_BIGINT_HPP
+#pragma once
 
-#include <iostream>
-#include <vector>
-#include <bitset>
 #include <array>
-#include <string>
-#include <sstream>
-#include <iomanip>
 #include <cstdint>
+#include <iosfwd>
+#include <string>
+#include <vector>
 
 namespace bigint {
 
+/// Arbitrary precision signed integer.
+/// Internal representation: little-endian vector of 32-bit words, sign-magnitude.
 class BigInt
 {
-    static const uint8_t baseBinary; // 2
-    static const uint8_t baseDecimal; // 10
-    static const uint8_t baseHexadecimal; // 16
-    static const uint64_t basisCalcSys; // 2^32 // 4294967296
+public:
+    // --- Base constants ---
+    static constexpr uint8_t baseBinary = 2;
+    static constexpr uint8_t baseDecimal = 10;
+    static constexpr uint8_t baseHexadecimal = 16;
+    static constexpr uint64_t basisCalcSys = 1ULL << 32;  // 2^32
 
-    static uint8_t baseInput;
-    static uint8_t baseOutput;
+    static inline uint8_t baseInput = baseDecimal;
+    static inline uint8_t baseOutput = baseDecimal;
 
 private:
     bool positive;
@@ -117,20 +117,24 @@ public:
     friend std::ostream& operator << (std::ostream& out, const BigInt& bigInt);
     friend std::istream& operator >> (std::istream& in, BigInt& bigInt);
 
-    std::string toStdString(int base = baseOutput) const;
-    std::vector<uint32_t> toStdVectorUint32_t() const;
-    std::vector<uint8_t> toStdVectorUint8_t() const;
-    operator uint64_t() const;
-    operator uint32_t() const;
-    operator uint16_t() const;
-    operator uint8_t() const;
-    operator bool() const;
-    size_t bitLenght() const;
-    size_t byteLenght() const;
-    bool isEven() const;
-    bool isOdd() const;
-    bool isPositive() const;
-    bool isNegative() const;
+    // --- Conversion ---
+    [[nodiscard]] std::string toStdString(int base = baseOutput) const;
+    [[nodiscard]] std::vector<uint32_t> toStdVectorUint32_t() const;
+    [[nodiscard]] std::vector<uint8_t> toStdVectorUint8_t() const;
+    [[nodiscard]] explicit operator uint64_t() const;
+    [[nodiscard]] explicit operator uint32_t() const;
+    [[nodiscard]] explicit operator uint16_t() const;
+    [[nodiscard]] explicit operator uint8_t() const;
+    [[nodiscard]] explicit operator bool() const;
+
+    // --- Queries ---
+    [[nodiscard]] size_t bitLength() const;
+    [[nodiscard]] size_t byteLength() const;
+    [[nodiscard]] bool isZero() const;
+    [[nodiscard]] bool isEven() const;
+    [[nodiscard]] bool isOdd() const;
+    [[nodiscard]] bool isPositive() const;
+    [[nodiscard]] bool isNegative() const;
 
 private:
     BigInt operator * (uint32_t multiplier) const; // multiplication
@@ -144,21 +148,18 @@ private:
     BigInt toBigIntDec() const;
 };
 
+/// Common constants for convenience.
 namespace constants {
-    inline const BigInt ZERO{0};
-    inline const BigInt ONE{1};
-    inline const BigInt TWO{2};
-    inline const BigInt THREE{3};
-    inline const BigInt FOUR{4};
-    inline const BigInt FIVE{5};
-    inline const BigInt SIX{6};
-    inline const BigInt SEVEN{7};
-    inline const BigInt EIGHT{8};
+    inline const BigInt Zero{0};
+    inline const BigInt One{1};
+    inline const BigInt Two{2};
+    inline const BigInt Three{3};
+    inline const BigInt Four{4};
+    inline const BigInt Five{5};
+    inline const BigInt Eight{8};
 }
 
 std::string strDec2strBin(std::string strDec);
 
 } // namespace bigint
-
-#endif // BIGINT_BIGINT_HPP
 

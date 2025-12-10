@@ -167,7 +167,7 @@ TEST_F(BigIntArithmeticTest, HugePowerMod) {
     BigInt result = powmod(base, exp, mod);
     // Result should be less than modulus
     EXPECT_TRUE(result < mod);
-    EXPECT_TRUE(result >= constants::ZERO);
+    EXPECT_TRUE(result >= constants::Zero);
 }
 
 TEST_F(BigIntArithmeticTest, HugeGCD) {
@@ -191,12 +191,20 @@ TEST_F(BigIntArithmeticTest, HugeBitShift) {
     BigInt twoTo10 = pow(two, BigInt("10", 10));  // 1024
     BigInt shiftedBy10 = a << static_cast<size_t>(10);
     EXPECT_EQ(shiftedBy10.toStdString(10), (a * twoTo10).toStdString(10));
-    // TODO: Right shift for large shifts has a bug in carry calculation
-    // (line 784: only captures lowest bit instead of lowest 'shift' bits)
-    // For now, test small right shifts which work correctly
+
+    // Test right shift
     BigInt num("1024", 10);
     BigInt rightShifted = num >> static_cast<size_t>(10);
     EXPECT_EQ(rightShifted.toStdString(10), "1");
+
+    // Test right shift with various shift amounts (verifies carry calculation fix)
+    BigInt largeNum("12345678901234567890", 10);
+    for (size_t shift = 1; shift < 32; ++shift) {
+        BigInt leftShifted = largeNum << shift;
+        BigInt backShifted = leftShifted >> shift;
+        EXPECT_EQ(backShifted.toStdString(10), largeNum.toStdString(10))
+            << "Failed for shift = " << shift;
+    }
 }
 
 TEST_F(BigIntArithmeticTest, HugeComparison) {
@@ -236,7 +244,7 @@ TEST_F(BigIntArithmeticTest, IsCoprime) {
 
     // Any number and 1 are coprime
     BigInt large("123456789012345678901234567890", 10);
-    EXPECT_TRUE(isCoprime(large, constants::ONE));
+    EXPECT_TRUE(isCoprime(large, constants::One));
 }
 
 TEST_F(BigIntArithmeticTest, InverseMod) {
