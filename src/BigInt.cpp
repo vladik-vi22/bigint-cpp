@@ -865,7 +865,7 @@ BigInt BigInt::rightCircularShift(const size_t shift) const
     return (((*this >> shift) | (*this << (bitLength() - shift))) & mask);
 }
 
-bool BigInt::operator !() const
+bool BigInt::operator !() const noexcept
 {
     {
         for(std::vector<uint32_t>::const_iterator iteratorVectorUint32_t = vectorUint32_t.cbegin(); iteratorVectorUint32_t != vectorUint32_t.cend(); ++iteratorVectorUint32_t)
@@ -879,22 +879,22 @@ bool BigInt::operator !() const
     }
 }
 
-bool BigInt::operator && (const BigInt& rightAND) const
+bool BigInt::operator && (const BigInt& rightAND) const noexcept
 {
     return static_cast<bool>(*this) && static_cast<bool>(rightAND);
 }
 
-bool BigInt::operator || (const BigInt& rightOR) const
+bool BigInt::operator || (const BigInt& rightOR) const noexcept
 {
     return static_cast<bool>(*this) || static_cast<bool>(rightOR);
 }
 
-bool BigInt::operator == (const BigInt& rightComparable) const
+bool BigInt::operator == (const BigInt& rightComparable) const noexcept
 {
     return (vectorUint32_t == rightComparable.vectorUint32_t && positive == rightComparable.positive);
 }
 
-bool BigInt::operator != (const BigInt& rightComparable) const
+bool BigInt::operator != (const BigInt& rightComparable) const noexcept
 {
     return (positive != rightComparable.positive || vectorUint32_t != rightComparable.vectorUint32_t);
 }
@@ -1143,7 +1143,7 @@ std::vector<uint8_t> BigInt::toStdVectorUint8_t() const
     return stdVectorUint8_t;
 }
 
-BigInt::operator uint64_t() const
+BigInt::operator uint64_t() const noexcept
 {
     if(vectorUint32_t.size() >= 2)
     {
@@ -1155,22 +1155,22 @@ BigInt::operator uint64_t() const
     }
 }
 
-BigInt::operator uint32_t() const
+BigInt::operator uint32_t() const noexcept
 {
     return vectorUint32_t.front();
 }
 
-BigInt::operator uint16_t() const
+BigInt::operator uint16_t() const noexcept
 {
     return static_cast<uint16_t>(vectorUint32_t.front());
 }
 
-BigInt::operator uint8_t() const
+BigInt::operator uint8_t() const noexcept
 {
     return static_cast<uint8_t>(vectorUint32_t.front());
 }
 
-BigInt::operator bool() const
+BigInt::operator bool() const noexcept
 {
     for(std::vector<uint32_t>::const_iterator iteratorVectorUint32_t = vectorUint32_t.cbegin(); iteratorVectorUint32_t != vectorUint32_t.cend(); ++iteratorVectorUint32_t)
     {
@@ -1182,7 +1182,7 @@ BigInt::operator bool() const
     return false;
 }
 
-size_t BigInt::bitLength() const
+size_t BigInt::bitLength() const noexcept
 {
     if(!(*this))
     {
@@ -1200,7 +1200,7 @@ size_t BigInt::bitLength() const
     return len;
 }
 
-size_t BigInt::byteLength() const
+size_t BigInt::byteLength() const noexcept
 {
     if(!(*this))
     {
@@ -1218,27 +1218,27 @@ size_t BigInt::byteLength() const
     return len;
 }
 
-bool BigInt::isZero() const
+bool BigInt::isZero() const noexcept
 {
     return vectorUint32_t.empty() || (vectorUint32_t.size() == 1 && vectorUint32_t[0] == 0);
 }
 
-bool BigInt::isEven() const
+bool BigInt::isEven() const noexcept
 {
     return !(vectorUint32_t.front() & 1);
 }
 
-bool BigInt::isOdd() const
+bool BigInt::isOdd() const noexcept
 {
     return vectorUint32_t.front() & 1;
 }
 
-bool BigInt::isPositive() const
+bool BigInt::isPositive() const noexcept
 {
     return positive;
 }
 
-bool BigInt::isNegative() const
+bool BigInt::isNegative() const noexcept
 {
     return !positive;
 }

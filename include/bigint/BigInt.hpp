@@ -161,17 +161,17 @@ public:
 
     /// @name Logical Operators
     /// @{
-    bool operator !() const;                        ///< Logical NOT (true if zero)
-    bool operator && (const BigInt& rightAND) const;  ///< Logical AND
-    bool operator || (const BigInt& rightOR) const;   ///< Logical OR
+    bool operator !() const noexcept;                          ///< Logical NOT (true if zero)
+    bool operator && (const BigInt& rightAND) const noexcept;  ///< Logical AND
+    bool operator || (const BigInt& rightOR) const noexcept;   ///< Logical OR
     /// @}
 
     /// @name Comparison Operators
     /// @{
-    bool operator == (const BigInt& rightComparable) const;
-    bool operator != (const BigInt& rightComparable) const;
-    bool operator < (const BigInt& rightComparable) const;
-    bool operator > (const BigInt& rightComparable) const;
+    bool operator == (const BigInt& rightComparable) const noexcept;
+    bool operator != (const BigInt& rightComparable) const noexcept;
+    bool operator < (const BigInt& rightComparable) const;  // May allocate for negative comparison
+    bool operator > (const BigInt& rightComparable) const;  // May allocate for negative comparison
     bool operator <= (const BigInt& rightComparable) const;
     bool operator >= (const BigInt& rightComparable) const;
     /// @}
@@ -203,22 +203,22 @@ public:
     /// @brief Convert to vector of bytes (big-endian order).
     [[nodiscard]] std::vector<uint8_t> toStdVectorUint8_t() const;
 
-    [[nodiscard]] explicit operator uint64_t() const;  ///< Convert to uint64_t (truncates)
-    [[nodiscard]] explicit operator uint32_t() const;  ///< Convert to uint32_t (truncates)
-    [[nodiscard]] explicit operator uint16_t() const;  ///< Convert to uint16_t (truncates)
-    [[nodiscard]] explicit operator uint8_t() const;   ///< Convert to uint8_t (truncates)
-    [[nodiscard]] explicit operator bool() const;      ///< True if non-zero
+    [[nodiscard]] explicit operator uint64_t() const noexcept;  ///< Convert to uint64_t (truncates)
+    [[nodiscard]] explicit operator uint32_t() const noexcept;  ///< Convert to uint32_t (truncates)
+    [[nodiscard]] explicit operator uint16_t() const noexcept;  ///< Convert to uint16_t (truncates)
+    [[nodiscard]] explicit operator uint8_t() const noexcept;   ///< Convert to uint8_t (truncates)
+    [[nodiscard]] explicit operator bool() const noexcept;      ///< True if non-zero
     /// @}
 
     /// @name Queries
     /// @{
-    [[nodiscard]] size_t bitLength() const;   ///< Number of bits (minimum 1 for zero)
-    [[nodiscard]] size_t byteLength() const;  ///< Number of bytes needed to represent value
-    [[nodiscard]] bool isZero() const;        ///< True if value is zero
-    [[nodiscard]] bool isEven() const;        ///< True if value is even
-    [[nodiscard]] bool isOdd() const;         ///< True if value is odd
-    [[nodiscard]] bool isPositive() const;    ///< True if value >= 0
-    [[nodiscard]] bool isNegative() const;    ///< True if value < 0
+    [[nodiscard]] size_t bitLength() const noexcept;   ///< Number of bits (minimum 1 for zero)
+    [[nodiscard]] size_t byteLength() const noexcept;  ///< Number of bytes needed to represent value
+    [[nodiscard]] bool isZero() const noexcept;        ///< True if value is zero
+    [[nodiscard]] bool isEven() const noexcept;        ///< True if value is even
+    [[nodiscard]] bool isOdd() const noexcept;         ///< True if value is odd
+    [[nodiscard]] bool isPositive() const noexcept;    ///< True if value >= 0
+    [[nodiscard]] bool isNegative() const noexcept;    ///< True if value < 0
     /// @}
 
 private:
