@@ -159,7 +159,5 @@ namespace constants {
     inline const BigInt Eight{8};
 }
 
-std::string strDec2strBin(std::string strDec);
-
 } // namespace bigint
 

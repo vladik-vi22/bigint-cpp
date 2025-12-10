@@ -8,6 +8,52 @@
 
 namespace bigint {
 
+namespace {
+
+/// Converts a decimal string to a binary string.
+/// Internal helper function for string constructor.
+std::string strDec2strBin(std::string strDec)
+{
+    if(strDec == "0")
+    {
+        return "0";
+    }
+    const uint8_t sizeOfCell = 9;
+    const uint32_t basisCalc = 1000000000;
+    std::string strBin;
+    std::vector<uint32_t> vectorUint32_t;
+    std::vector<uint32_t> zeroArr;
+    uint32_t carryNext;
+    uint32_t carryCurrent;
+    char charBin;
+    while(strDec.length() % sizeOfCell)
+    {
+        strDec.insert(0, 1, '0');
+    }
+    size_t sizeOfVector = strDec.length() / sizeOfCell;
+    vectorUint32_t.reserve(sizeOfVector);
+    for(size_t indexVectorUint32_t = 0; indexVectorUint32_t < sizeOfVector; ++indexVectorUint32_t)
+    {
+        vectorUint32_t.emplace_back(static_cast<uint32_t>(std::stoul(strDec.substr(indexVectorUint32_t * sizeOfCell, sizeOfCell), nullptr, 10)));
+    }
+    zeroArr.resize(vectorUint32_t.size(), 0);
+    while(vectorUint32_t != zeroArr)
+    {
+        carryNext = 0;
+        for(std::vector<uint32_t>::iterator iteratorShifting = vectorUint32_t.begin(); iteratorShifting != vectorUint32_t.end(); ++iteratorShifting)
+        {
+            carryCurrent = carryNext;
+            carryNext = (*iteratorShifting & 1);
+            *iteratorShifting = (*iteratorShifting + carryCurrent * basisCalc) >> 1;
+        }
+        charBin = carryNext ? '1' : '0';
+        strBin.insert(strBin.begin(), 1, charBin);
+    }
+    return strBin;
+}
+
+} // anonymous namespace
+
 BigInt::BigInt()
 {
 }
@@ -1258,48 +1304,6 @@ BigInt BigInt::toBigIntDec() const
     }
     return bigNumberDec;
 }
-
-std::string strDec2strBin(std::string strDec)
-{
-    if(strDec == "0")
-    {
-        return "0";
-    }
-    const uint8_t sizeOfCell = 9;
-    const uint32_t basisCalc = 1000000000;
-    std::string strBin;
-    std::vector<uint32_t> vectorUint32_t;
-    std::vector<uint32_t> zeroArr;
-    uint32_t carryNext;
-    uint32_t carryCurrent;
-    char charBin;
-    while(strDec.length() % sizeOfCell)
-    {
-        strDec.insert(0, 1, '0');
-    }
-    size_t sizeOfVector = strDec.length() / sizeOfCell;
-    vectorUint32_t.reserve(sizeOfVector);
-    for(size_t indexVectorUint32_t = 0; indexVectorUint32_t < sizeOfVector; ++indexVectorUint32_t)
-    {
-        vectorUint32_t.emplace_back(static_cast<uint32_t>(std::stoul(strDec.substr(indexVectorUint32_t * sizeOfCell, sizeOfCell), nullptr, 10)));
-    }
-    zeroArr.resize(vectorUint32_t.size(), 0);
-    while(vectorUint32_t != zeroArr)
-    {
-        carryNext = 0;
-        for(std::vector<uint32_t>::iterator iteratorShifting = vectorUint32_t.begin(); iteratorShifting != vectorUint32_t.end(); ++iteratorShifting)
-        {
-            carryCurrent = carryNext;
-            carryNext = (*iteratorShifting & 1);
-            *iteratorShifting = (*iteratorShifting + carryCurrent * basisCalc) >> 1;
-        }
-        charBin = carryNext ? '1' : '0';
-        strBin.insert(strBin.begin(), 1, charBin);
-    }
-    return strBin;
-}
-
-
 
 } // namespace bigint
 
