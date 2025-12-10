@@ -891,98 +891,94 @@ bool BigInt::operator || (const BigInt& rightOR) const noexcept
 
 bool BigInt::operator == (const BigInt& rightComparable) const noexcept
 {
+    // Handle -0 == +0 case
+    if (isZero() && rightComparable.isZero()) return true;
     return (vectorUint32_t == rightComparable.vectorUint32_t && positive == rightComparable.positive);
 }
 
 bool BigInt::operator != (const BigInt& rightComparable) const noexcept
 {
+    // Handle -0 == +0 case
+    if (isZero() && rightComparable.isZero()) return false;
     return (positive != rightComparable.positive || vectorUint32_t != rightComparable.vectorUint32_t);
 }
 
-bool BigInt::operator < (const BigInt& rightComparable) const
+int BigInt::compareMagnitude(const BigInt& other) const noexcept
 {
-    if(positive && rightComparable.positive)
+    if (vectorUint32_t.size() > other.vectorUint32_t.size())
     {
-        if(vectorUint32_t.size() > rightComparable.vectorUint32_t.size())
-        {
-            return false;
-        }
-        else if(vectorUint32_t.size() < rightComparable.vectorUint32_t.size())
-        {
-            return true;
-        }
-        else // vectorUint32_t.size() == rightComparable.vectorUint32_t.size()
-        {
-            for(std::vector<uint32_t>::const_reverse_iterator iteratorLeftComparable = vectorUint32_t.crbegin(), iteratorRightComparable = rightComparable.vectorUint32_t.crbegin() ; iteratorLeftComparable != vectorUint32_t.crend(); ++iteratorLeftComparable, ++iteratorRightComparable)
-            {
-                if(*iteratorLeftComparable != *iteratorRightComparable)
-                {
-                    return *iteratorLeftComparable < *iteratorRightComparable;
-                }
-            }
-            return false;
-        }
+        return 1;
     }
-    else if(positive && !rightComparable.positive)
+    else if (vectorUint32_t.size() < other.vectorUint32_t.size())
+    {
+        return -1;
+    }
+    // Same size - compare digit by digit from high to low
+    for (auto itLeft = vectorUint32_t.crbegin(), itRight = other.vectorUint32_t.crbegin();
+         itLeft != vectorUint32_t.crend(); ++itLeft, ++itRight)
+    {
+        if (*itLeft > *itRight) return 1;
+        if (*itLeft < *itRight) return -1;
+    }
+    return 0;
+}
+
+bool BigInt::operator < (const BigInt& rightComparable) const noexcept
+{
+    // Handle zero cases: 0 is never less than 0
+    if (isZero() && rightComparable.isZero()) return false;
+
+    if (positive && rightComparable.positive)
+    {
+        return compareMagnitude(rightComparable) < 0;
+    }
+    else if (positive && !rightComparable.positive)
     {
         return false;
     }
-    else if(!positive && rightComparable.positive)
+    else if (!positive && rightComparable.positive)
     {
         return true;
     }
     else // !positive && !rightComparable.positive
     {
-        return abs(*this) > abs(rightComparable);
+        // For negative numbers: -5 < -3 means |5| > |3|
+        return compareMagnitude(rightComparable) > 0;
     }
 }
 
-bool BigInt::operator > (const BigInt& rightComparable) const
+bool BigInt::operator > (const BigInt& rightComparable) const noexcept
 {
-    if(positive && rightComparable.positive)
+    // Handle zero cases: 0 is never greater than 0
+    if (isZero() && rightComparable.isZero()) return false;
+
+    if (positive && rightComparable.positive)
     {
-        if(vectorUint32_t.size() > rightComparable.vectorUint32_t.size())
-        {
-            return true;
-        }
-        else if(vectorUint32_t.size() < rightComparable.vectorUint32_t.size())
-        {
-            return false;
-        }
-        else // vectorUint32_t.size == rightComparable.vectorUint32_t.size()
-        {
-            for(std::vector<uint32_t>::const_reverse_iterator iteratorLeftComparable = vectorUint32_t.crbegin(), iteratorRightComparable = rightComparable.vectorUint32_t.crbegin(); iteratorLeftComparable != vectorUint32_t.crend(); ++iteratorLeftComparable, ++iteratorRightComparable)
-            {
-                if(*iteratorLeftComparable != *iteratorRightComparable)
-                {
-                    return *iteratorLeftComparable > *iteratorRightComparable;
-                }
-            }
-            return false;
-        }
+        return compareMagnitude(rightComparable) > 0;
     }
-    else if(positive && !rightComparable.positive)
+    else if (positive && !rightComparable.positive)
     {
         return true;
     }
-    else if(!positive && rightComparable.positive)
+    else if (!positive && rightComparable.positive)
     {
         return false;
     }
     else // !positive && !rightComparable.positive
     {
-        return abs(*this) < abs(rightComparable);
+        // For negative numbers: -3 > -5 means |3| < |5|
+        return compareMagnitude(rightComparable) < 0;
     }
 }
 
-bool BigInt::operator <= (const BigInt& rightComparable) const
+bool BigInt::operator <= (const BigInt& rightComparable) const noexcept
 {
-    return (*this == rightComparable || *this < rightComparable);
+    return !(*this > rightComparable);
 }
 
-bool BigInt::operator >= (const BigInt& rightComparable) const
+bool BigInt::operator >= (const BigInt& rightComparable) const noexcept
 {
-    return (*this == rightComparable || *this > rightComparable);
+    return !(*this < rightComparable);
 }
 
 BigInt abs(const BigInt& bigInt)
@@ -1035,12 +1031,12 @@ BigInt lcm(const BigInt& bigInt1, const BigInt& bigInt2)
     return (bigInt1 * bigInt2) / gcd(bigInt1, bigInt2);
 }
 
-const BigInt& max(const BigInt& bigInt1, const BigInt& bigInt2)
+const BigInt& max(const BigInt& bigInt1, const BigInt& bigInt2) noexcept
 {
     return bigInt1 > bigInt2 ? bigInt1 : bigInt2;
 }
 
-const BigInt& min(const BigInt& bigInt1, const BigInt& bigInt2)
+const BigInt& min(const BigInt& bigInt1, const BigInt& bigInt2) noexcept
 {
     return bigInt1 < bigInt2 ? bigInt1 : bigInt2;
 }

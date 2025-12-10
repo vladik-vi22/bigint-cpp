@@ -127,6 +127,26 @@ TEST_F(BigIntBasicTest, IsZeroNegativeZero) {
     EXPECT_TRUE(negZero.isZero());
 }
 
+TEST_F(BigIntBasicTest, NegativeZeroEqualsPositiveZero) {
+    // Ensure -0 == +0 (sign should not matter for zero)
+    BigInt negZero("-0", 10);
+    BigInt posZero("0", 10);
+    BigInt defaultZero;
+
+    EXPECT_EQ(negZero, posZero);
+    EXPECT_EQ(negZero, defaultZero);
+    EXPECT_EQ(posZero, defaultZero);
+
+    // Also test != returns false
+    EXPECT_FALSE(negZero != posZero);
+
+    // Test comparison operators with zeros
+    EXPECT_FALSE(negZero < posZero);
+    EXPECT_FALSE(negZero > posZero);
+    EXPECT_TRUE(negZero <= posZero);
+    EXPECT_TRUE(negZero >= posZero);
+}
+
 // ============================================================================
 // Edge Case Tests
 // ============================================================================

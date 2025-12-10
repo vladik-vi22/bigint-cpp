@@ -170,10 +170,10 @@ public:
     /// @{
     bool operator == (const BigInt& rightComparable) const noexcept;
     bool operator != (const BigInt& rightComparable) const noexcept;
-    bool operator < (const BigInt& rightComparable) const;  // May allocate for negative comparison
-    bool operator > (const BigInt& rightComparable) const;  // May allocate for negative comparison
-    bool operator <= (const BigInt& rightComparable) const;
-    bool operator >= (const BigInt& rightComparable) const;
+    bool operator < (const BigInt& rightComparable) const noexcept;
+    bool operator > (const BigInt& rightComparable) const noexcept;
+    bool operator <= (const BigInt& rightComparable) const noexcept;
+    bool operator >= (const BigInt& rightComparable) const noexcept;
     /// @}
 
     /// @name Utility Functions
@@ -181,8 +181,8 @@ public:
     friend BigInt abs(const BigInt& bigInt);                      ///< Absolute value
     friend BigInt gcd(BigInt bigInt1, BigInt bigInt2);            ///< Greatest common divisor
     friend BigInt lcm(const BigInt& bigInt1, const BigInt& bigInt2); ///< Least common multiple
-    friend const BigInt& max(const BigInt& bigInt1, const BigInt& bigInt2);
-    friend const BigInt& min(const BigInt& bigInt1, const BigInt& bigInt2);
+    friend const BigInt& max(const BigInt& bigInt1, const BigInt& bigInt2) noexcept;
+    friend const BigInt& min(const BigInt& bigInt1, const BigInt& bigInt2) noexcept;
     /// @}
 
     /// @name Stream I/O
@@ -222,6 +222,10 @@ public:
     /// @}
 
 private:
+    /// @brief Compare magnitudes (absolute values) without allocation.
+    /// @return -1 if |*this| < |other|, 0 if equal, 1 if |*this| > |other|
+    [[nodiscard]] int compareMagnitude(const BigInt& other) const noexcept;
+
     BigInt operator * (uint32_t multiplier) const;
     BigInt& operator *= (uint32_t multiplier);
     std::pair<BigInt, BigInt> DivMod(const BigInt& divisor) const;
