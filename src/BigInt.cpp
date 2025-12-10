@@ -778,13 +778,16 @@ BigInt BigInt::operator >> (const size_t shift) const
         shifted.vectorUint32_t.reserve(vectorUint32_t.size());
         uint32_t carry = 0;
         uint32_t shifted_temp = 0;
-        const uint32_t mask = (1ULL << shift) - 1;  // Mask for lowest 'shift' bits
+        const uint32_t mask = static_cast<uint32_t>((1ULL << shift) - 1);  // Mask for lowest 'shift' bits
+        // Process from high to low, building result in reverse order
         for(std::vector<uint32_t>::const_reverse_iterator iteratorShifting = vectorUint32_t.crbegin(); iteratorShifting != vectorUint32_t.crend(); ++iteratorShifting)
         {
             shifted_temp = (*iteratorShifting >> shift) | carry;
             carry = (*iteratorShifting & mask) << (32 - shift);
-            shifted.vectorUint32_t.emplace(shifted.vectorUint32_t.begin(), shifted_temp);
+            shifted.vectorUint32_t.emplace_back(shifted_temp);
         }
+        // Reverse to get correct order (low to high)
+        std::reverse(shifted.vectorUint32_t.begin(), shifted.vectorUint32_t.end());
         shifted.deleteZeroHighOrderDigit();
         return shifted;
     }
@@ -1303,5 +1306,6 @@ std::string strDec2strBin(std::string strDec)
 
 
 } // namespace bigint
+
 
 
