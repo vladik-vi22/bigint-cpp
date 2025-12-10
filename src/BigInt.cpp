@@ -180,8 +180,8 @@ BigInt::BigInt(const std::vector<bool>& bigIntVectorBool, const bool isPositive)
 
 BigInt::BigInt(const uint64_t bigIntUint64_t, const bool isPositive)
 {
-    vectorUint32_t.emplace_back(bigIntUint64_t & UINT32_MAX);
-    vectorUint32_t.emplace_back(bigIntUint64_t >> 32);
+    vectorUint32_t.emplace_back(static_cast<uint32_t>(bigIntUint64_t & UINT32_MAX));
+    vectorUint32_t.emplace_back(static_cast<uint32_t>(bigIntUint64_t >> 32));
     positive = isPositive;
 }
 
@@ -193,8 +193,9 @@ BigInt::BigInt(const uint32_t bigIntUint32_t, const bool isPositive)
 
 BigInt::BigInt(const int64_t bigIntInt64_t)
 {
-    vectorUint32_t.emplace_back(std::abs(bigIntInt64_t) & UINT32_MAX);
-    vectorUint32_t.emplace_back(static_cast<uint32_t>(std::abs(bigIntInt64_t) >> 32));
+    const auto absValue = static_cast<uint64_t>(std::abs(bigIntInt64_t));
+    vectorUint32_t.emplace_back(static_cast<uint32_t>(absValue & UINT32_MAX));
+    vectorUint32_t.emplace_back(static_cast<uint32_t>(absValue >> 32));
     positive = (bigIntInt64_t >= 0);
 }
 
@@ -232,16 +233,16 @@ BigInt BigInt::operator + (const BigInt& addend) const
         while(iteratorAddend != iteratorAddendEnd)
         {
             sum_temp = static_cast<uint64_t>(*iteratorAugend) + static_cast<uint64_t>(*iteratorAddend) + static_cast<uint64_t>(carry);
-            sum.vectorUint32_t.emplace_back(sum_temp & UINT32_MAX);
-            carry = sum_temp >> 32;
+            sum.vectorUint32_t.emplace_back(static_cast<uint32_t>(sum_temp & UINT32_MAX));
+            carry = static_cast<uint32_t>(sum_temp >> 32);
             ++iteratorAugend;
             ++iteratorAddend;
         }
         while(iteratorAugend != iteratorAugendEnd)
         {
             sum_temp = static_cast<uint64_t>(*iteratorAugend) + static_cast<uint64_t>(carry);
-            sum.vectorUint32_t.emplace_back(sum_temp & UINT32_MAX);
-            carry = sum_temp >> 32;
+            sum.vectorUint32_t.emplace_back(static_cast<uint32_t>(sum_temp & UINT32_MAX));
+            carry = static_cast<uint32_t>(sum_temp >> 32);
             ++iteratorAugend;
         }
         if(carry)
@@ -385,8 +386,8 @@ BigInt BigInt::operator * (const uint32_t multiplier) const
     for(std::vector<uint32_t>::const_iterator iteratorMultiplicand = vectorUint32_t.cbegin(); iteratorMultiplicand != vectorUint32_t.cend(); ++iteratorMultiplicand)
     {
         product_temp = static_cast<uint64_t>(*iteratorMultiplicand) * static_cast<uint64_t>(multiplier) + static_cast<uint64_t>(carry);
-        product.vectorUint32_t.emplace_back(product_temp & UINT32_MAX);
-        carry = product_temp >> 32;
+        product.vectorUint32_t.emplace_back(static_cast<uint32_t>(product_temp & UINT32_MAX));
+        carry = static_cast<uint32_t>(product_temp >> 32);
     }
     if(carry)
     {
