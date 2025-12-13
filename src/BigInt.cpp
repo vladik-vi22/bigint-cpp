@@ -198,15 +198,19 @@ BigInt::BigInt(const int32_t value) {
 }
 
 BigInt& BigInt::operator=(const BigInt& other) {
-  digits_ = other.digits_;
-  positive_ = other.positive_;
+  if (this != &other) {
+    digits_ = other.digits_;
+    positive_ = other.positive_;
+  }
   return *this;
 }
 
 BigInt& BigInt::operator=(BigInt&& other) noexcept {
-  digits_ = std::move(other.digits_);
-  positive_ = other.positive_;
-  other.positive_ = true;
+  if (this != &other) {
+    digits_ = std::move(other.digits_);
+    positive_ = other.positive_;
+    other.positive_ = true;
+  }
   return *this;
 }
 
