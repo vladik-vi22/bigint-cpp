@@ -234,6 +234,10 @@ class BigInt {
   [[nodiscard]] explicit operator uint32_t() const noexcept;  ///< Convert to uint32_t (truncates)
   [[nodiscard]] explicit operator uint16_t() const noexcept;  ///< Convert to uint16_t (truncates)
   [[nodiscard]] explicit operator uint8_t() const noexcept;   ///< Convert to uint8_t (truncates)
+  [[nodiscard]] explicit operator int64_t() const noexcept;   ///< Convert to int64_t (truncates, preserves sign)
+  [[nodiscard]] explicit operator int32_t() const noexcept;   ///< Convert to int32_t (truncates, preserves sign)
+  [[nodiscard]] explicit operator int16_t() const noexcept;   ///< Convert to int16_t (truncates, preserves sign)
+  [[nodiscard]] explicit operator int8_t() const noexcept;    ///< Convert to int8_t (truncates, preserves sign)
   [[nodiscard]] explicit operator bool() const noexcept;      ///< True if non-zero
   /// @}
 

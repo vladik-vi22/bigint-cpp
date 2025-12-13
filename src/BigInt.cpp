@@ -1397,6 +1397,30 @@ BigInt::operator uint8_t() const noexcept
     return digits_.empty() ? static_cast<uint8_t>(0) : static_cast<uint8_t>(digits_.front());
 }
 
+BigInt::operator int64_t() const noexcept
+{
+    const auto magnitude = static_cast<uint64_t>(*this);
+    return positive_ ? static_cast<int64_t>(magnitude) : -static_cast<int64_t>(magnitude);
+}
+
+BigInt::operator int32_t() const noexcept
+{
+    const auto magnitude = static_cast<uint32_t>(*this);
+    return positive_ ? static_cast<int32_t>(magnitude) : -static_cast<int32_t>(magnitude);
+}
+
+BigInt::operator int16_t() const noexcept
+{
+    const auto magnitude = static_cast<uint16_t>(*this);
+    return positive_ ? static_cast<int16_t>(magnitude) : -static_cast<int16_t>(magnitude);
+}
+
+BigInt::operator int8_t() const noexcept
+{
+    const auto magnitude = static_cast<uint8_t>(*this);
+    return positive_ ? static_cast<int8_t>(magnitude) : -static_cast<int8_t>(magnitude);
+}
+
 BigInt::operator bool() const noexcept
 {
     for(std::vector<uint32_t>::const_iterator iteratordigits_ = digits_.cbegin(); iteratordigits_ != digits_.cend(); ++iteratordigits_)
