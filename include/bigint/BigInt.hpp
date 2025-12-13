@@ -179,6 +179,26 @@ class BigInt {
   friend void swap(BigInt& lhs, BigInt& rhs) noexcept;  ///< Swap two values
   /// @}
 
+  /// @name Number Theory
+  /// @{
+
+  /// @brief Test if value is probably prime using Miller-Rabin.
+  /// @param rounds Number of test rounds (default 16, higher = more accurate).
+  /// @return true if probably prime, false if definitely composite.
+  [[nodiscard]] bool isProbablePrime(size_t rounds = 16) const;
+
+  /// @brief Generate a random BigInt with specified number of bits.
+  /// @param numBits Number of bits in the result.
+  /// @return Random BigInt in range [2^(numBits-1), 2^numBits - 1].
+  [[nodiscard]] static BigInt randomBits(size_t numBits);
+
+  /// @brief Generate a random BigInt in range [0, max).
+  /// @param max Upper bound (exclusive).
+  /// @return Random BigInt in range [0, max).
+  [[nodiscard]] static BigInt randomBelow(const BigInt& max);
+
+  /// @}
+
   /// @name Stream I/O
   /// @{
   friend std::ostream& operator<<(std::ostream& out, const BigInt& value);

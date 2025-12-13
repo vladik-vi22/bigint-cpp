@@ -5,6 +5,7 @@
 #include <cmath>
 #include <compare>
 #include <iomanip>
+#include <random>
 #include <sstream>
 
 namespace bigint {
@@ -1057,6 +1058,117 @@ void swap(BigInt& lhs, BigInt& rhs) noexcept
 {
     std::swap(lhs.positive_, rhs.positive_);
     std::swap(lhs.digits_, rhs.digits_);
+}
+
+// ============================================================================
+// Number Theory
+// ============================================================================
+
+bool BigInt::isProbablePrime(size_t rounds) const
+{
+    // Handle small cases
+    if (!positive_ || isZero()) return false;
+    if (*this == BigInt(2)) return true;
+    if (*this == BigInt(3)) return true;
+    if (isEven()) return false;
+    if (*this < BigInt(2)) return false;
+
+    // Write n-1 as 2^s * d where d is odd
+    BigInt d = *this - BigInt(1);
+    size_t s = 0;
+    while (d.isEven()) {
+        d >>= 1;
+        ++s;
+    }
+
+    // Miller-Rabin test
+    const BigInt n_minus_1 = *this - BigInt(1);
+    const BigInt n_minus_2 = *this - BigInt(2);
+
+    for (size_t i = 0; i < rounds; ++i) {
+        // Pick random witness a in [2, n-2]
+        BigInt a = BigInt::randomBelow(n_minus_2);
+        if (a < BigInt(2)) a = BigInt(2);
+
+        // Check gcd(a, n) == 1
+        if (gcd(a, *this) != BigInt(1)) {
+            return false;  // Found a factor
+        }
+
+        // Compute x = a^d mod n
+        BigInt x = powmod(a, d, *this);
+
+        if (x == BigInt(1) || x == n_minus_1) {
+            continue;  // Probably prime for this witness
+        }
+
+        bool composite = true;
+        for (size_t r = 1; r < s; ++r) {
+            x = powmod(x, BigInt(2), *this);
+            if (x == n_minus_1) {
+                composite = false;
+                break;
+            }
+            if (x == BigInt(1)) {
+                return false;  // Definitely composite
+            }
+        }
+
+        if (composite) {
+            return false;  // Definitely composite
+        }
+    }
+
+    return true;  // Probably prime
+}
+
+BigInt BigInt::randomBits(size_t numBits)
+{
+    if (numBits == 0) return BigInt();
+
+    // Use random_device for seeding and mt19937_64 for generation
+    static std::random_device rd;
+    static std::mt19937_64 gen(rd());
+    static std::uniform_int_distribution<uint32_t> dist32(0, UINT32_MAX);
+
+    // Calculate number of 32-bit words needed
+    size_t numWords = (numBits + 31) / 32;
+    std::vector<uint32_t> digits(numWords);
+
+    // Fill with random data
+    for (size_t i = 0; i < numWords; ++i) {
+        digits[i] = dist32(gen);
+    }
+
+    // Mask the top word to get exactly numBits
+    size_t topBits = numBits % 32;
+    if (topBits == 0) topBits = 32;
+
+    // Set the top bit to ensure we have exactly numBits
+    uint32_t mask = (1U << topBits) - 1;
+    digits.back() &= mask;
+    digits.back() |= (1U << (topBits - 1));  // Set MSB
+
+    // Construct BigInt from little-endian digits
+    BigInt result;
+    result.digits_ = std::move(digits);
+    result.positive_ = true;
+    return result;
+}
+
+BigInt BigInt::randomBelow(const BigInt& max)
+{
+    if (max <= BigInt(1)) return BigInt();
+
+    size_t bits = max.bitLength();
+
+    // Rejection sampling to get uniform distribution
+    BigInt result;
+    do {
+        result = randomBits(bits);
+    } while (result >= max);
+
+    return result;
 }
 
 std::ostream& operator<<(std::ostream& out, const BigInt& value) {
