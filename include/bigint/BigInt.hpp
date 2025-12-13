@@ -238,3 +238,24 @@ class BigInt {
 };
 
 }  // namespace bigint
+
+namespace std {
+
+/// @brief Hash specialization for BigInt to enable use in unordered containers.
+template <>
+struct hash<bigint::BigInt> {
+  size_t operator()(const bigint::BigInt& value) const noexcept {
+    // FNV-1a inspired hash combining sign and all digits
+    size_t h = 14695981039346656037ULL;  // FNV offset basis
+    h ^= static_cast<size_t>(value.isNegative());
+    h *= 1099511628211ULL;  // FNV prime
+    auto digits = value.toStdVectorUint32_t();
+    for (uint32_t digit : digits) {
+      h ^= static_cast<size_t>(digit);
+      h *= 1099511628211ULL;
+    }
+    return h;
+  }
+};
+
+}  // namespace std
