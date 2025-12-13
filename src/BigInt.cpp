@@ -1060,6 +1060,12 @@ const BigInt& min(const BigInt& bigInt1, const BigInt& bigInt2) noexcept
     return bigInt1 < bigInt2 ? bigInt1 : bigInt2;
 }
 
+void swap(BigInt& lhs, BigInt& rhs) noexcept
+{
+    std::swap(lhs.positive_, rhs.positive_);
+    std::swap(lhs.digits_, rhs.digits_);
+}
+
 std::ostream& operator<<(std::ostream& out, const BigInt& value) {
   std::string str = value.toStdString(kDefaultOutputBase);
   out << str;

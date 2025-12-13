@@ -178,6 +178,7 @@ class BigInt {
   friend BigInt lcm(const BigInt& a, const BigInt& b);  ///< Least common multiple
   friend const BigInt& max(const BigInt& a, const BigInt& b) noexcept;  ///< Maximum
   friend const BigInt& min(const BigInt& a, const BigInt& b) noexcept;  ///< Minimum
+  friend void swap(BigInt& lhs, BigInt& rhs) noexcept;  ///< Swap two values
   /// @}
 
   /// @name Stream I/O
