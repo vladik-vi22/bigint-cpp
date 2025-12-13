@@ -10,206 +10,202 @@ namespace bigint {
 
 namespace {
 
+// Internal constants (not exposed in public API)
+constexpr uint64_t kBasisCalcSys = 1ULL << 32;  // 2^32 for carry calculations
+constexpr uint32_t kBasisCalcDec = 1000000000;  // 10^9 for decimal conversion
+constexpr uint8_t kDecimalCellSize = 9;         // Digits per decimal cell
+
 /// Converts a decimal string to a binary string.
 /// Internal helper function for string constructor.
-std::string strDec2strBin(std::string strDec)
-{
-    if(strDec == "0")
-    {
-        return "0";
+std::string DecimalToBinaryString(std::string decimal_str) {
+  if (decimal_str == "0") {
+    return "0";
+  }
+  std::string binary_str;
+  std::vector<uint32_t> digits;
+  std::vector<uint32_t> zero_arr;
+  uint32_t carry_next;
+  uint32_t carry_current;
+
+  while (decimal_str.length() % kDecimalCellSize) {
+    decimal_str.insert(0, 1, '0');
+  }
+  size_t num_cells = decimal_str.length() / kDecimalCellSize;
+  digits.reserve(num_cells);
+  for (size_t i = 0; i < num_cells; ++i) {
+    digits.emplace_back(static_cast<uint32_t>(
+        std::stoul(decimal_str.substr(i * kDecimalCellSize, kDecimalCellSize),
+                   nullptr, 10)));
+  }
+  zero_arr.resize(digits.size(), 0);
+  while (digits != zero_arr) {
+    carry_next = 0;
+    for (auto it = digits.begin(); it != digits.end(); ++it) {
+      carry_current = carry_next;
+      carry_next = (*it & 1);
+      *it = (*it + carry_current * kBasisCalcDec) >> 1;
     }
-    const uint8_t sizeOfCell = 9;
-    const uint32_t basisCalc = 1000000000;
-    std::string strBin;
-    std::vector<uint32_t> vectorUint32_t;
-    std::vector<uint32_t> zeroArr;
-    uint32_t carryNext;
-    uint32_t carryCurrent;
-    char charBin;
-    while(strDec.length() % sizeOfCell)
-    {
-        strDec.insert(0, 1, '0');
-    }
-    size_t sizeOfVector = strDec.length() / sizeOfCell;
-    vectorUint32_t.reserve(sizeOfVector);
-    for(size_t indexVectorUint32_t = 0; indexVectorUint32_t < sizeOfVector; ++indexVectorUint32_t)
-    {
-        vectorUint32_t.emplace_back(static_cast<uint32_t>(std::stoul(strDec.substr(indexVectorUint32_t * sizeOfCell, sizeOfCell), nullptr, 10)));
-    }
-    zeroArr.resize(vectorUint32_t.size(), 0);
-    while(vectorUint32_t != zeroArr)
-    {
-        carryNext = 0;
-        for(std::vector<uint32_t>::iterator iteratorShifting = vectorUint32_t.begin(); iteratorShifting != vectorUint32_t.end(); ++iteratorShifting)
-        {
-            carryCurrent = carryNext;
-            carryNext = (*iteratorShifting & 1);
-            *iteratorShifting = (*iteratorShifting + carryCurrent * basisCalc) >> 1;
-        }
-        charBin = carryNext ? '1' : '0';
-        strBin.insert(strBin.begin(), 1, charBin);
-    }
-    return strBin;
+    binary_str.insert(binary_str.begin(), 1, carry_next ? '1' : '0');
+  }
+  return binary_str;
 }
 
-} // anonymous namespace
+}  // anonymous namespace
 
-BigInt::BigInt()
-{
+// Define external constants
+namespace constants {
+
+const BigInt kZero(static_cast<uint32_t>(0));
+const BigInt kOne(static_cast<uint32_t>(1));
+const BigInt kTwo(static_cast<uint32_t>(2));
+const BigInt kThree(static_cast<uint32_t>(3));
+const BigInt kFour(static_cast<uint32_t>(4));
+const BigInt kFive(static_cast<uint32_t>(5));
+const BigInt kEight(static_cast<uint32_t>(8));
+
+// Legacy aliases
+const BigInt& Zero = kZero;
+const BigInt& One = kOne;
+const BigInt& Two = kTwo;
+const BigInt& Three = kThree;
+const BigInt& Four = kFour;
+const BigInt& Five = kFive;
+const BigInt& Eight = kEight;
+
+}  // namespace constants
+
+BigInt::BigInt() {
 }
 
-BigInt::BigInt(const BigInt& bigInt)
-{
-    vectorUint32_t = bigInt.vectorUint32_t;
-    positive = bigInt.positive;
+BigInt::BigInt(const BigInt& other) {
+  digits_ = other.digits_;
+  positive_ = other.positive_;
 }
 
-BigInt::BigInt(std::string bigIntString, const uint8_t base)
-{
-    const uint8_t sizeOfCell = base == baseHexadecimal ? (sizeof(uint32_t) * 2) : (sizeof(uint32_t) * 8);
-    if(bigIntString[0] == '-')
-    {
-        positive = false;
-        bigIntString.erase(0, 1);
-    }
-    else
-    {
-        positive = true;
-    }
-    if(base == baseDecimal)
-    {
-        bigIntString = strDec2strBin(bigIntString);
-    }
-    while(bigIntString.length() % sizeOfCell)
-    {
-        bigIntString.insert(0, 1, '0');
-    }
-    size_t sizeOfArr = bigIntString.length() / sizeOfCell;
-    vectorUint32_t.reserve(sizeOfArr);
-    for(size_t indexVectorUint32_t = 0; indexVectorUint32_t < sizeOfArr; ++indexVectorUint32_t)
-    {
-        vectorUint32_t.emplace(vectorUint32_t.begin(), static_cast<uint32_t>(std::stoul(bigIntString.substr(indexVectorUint32_t * sizeOfCell, sizeOfCell), nullptr, base == baseHexadecimal ? baseHexadecimal : baseBinary)));
-    }
+BigInt::BigInt(std::string str, const uint8_t base) {
+  const uint8_t cell_size = base == kBaseHexadecimal
+                                ? (sizeof(uint32_t) * 2)
+                                : (sizeof(uint32_t) * 8);
+  if (!str.empty() && str[0] == '-') {
+    positive_ = false;
+    str.erase(0, 1);
+  } else {
+    positive_ = true;
+  }
+  if (base == kBaseDecimal) {
+    str = DecimalToBinaryString(str);
+  }
+  while (str.length() % cell_size) {
+    str.insert(0, 1, '0');
+  }
+  size_t num_cells = str.length() / cell_size;
+  digits_.reserve(num_cells);
+  for (size_t i = 0; i < num_cells; ++i) {
+    digits_.emplace(
+        digits_.begin(),
+        static_cast<uint32_t>(std::stoul(
+            str.substr(i * cell_size, cell_size), nullptr,
+            base == kBaseHexadecimal ? kBaseHexadecimal : kBaseBinary)));
+  }
 }
 
-BigInt::BigInt(const std::vector<uint32_t>& bigIntVectorUint32_t, const bool isPositive)
-{
-    vectorUint32_t = bigIntVectorUint32_t;
-    std::reverse(vectorUint32_t.begin(), vectorUint32_t.end());
-    deleteZeroHighOrderDigit();
-    positive = isPositive;
+BigInt::BigInt(const std::vector<uint32_t>& vec, const bool is_positive_) {
+  digits_ = vec;
+  std::reverse(digits_.begin(), digits_.end());
+  deleteZeroHighOrderDigit();
+  positive_ = is_positive_;
 }
 
-BigInt::BigInt(const std::vector<uint16_t>& bigIntVectorUint16_t, const bool isPositive)
-{
-    vectorUint32_t.reserve(bigIntVectorUint16_t.size() & 1 ? (bigIntVectorUint16_t.size() >> 1) + 1 : bigIntVectorUint16_t.size() >> 1);
-    std::vector<uint16_t>::const_reverse_iterator iteratorVectorUint16_t = bigIntVectorUint16_t.crbegin();
-    for(size_t indexVectorUint32_t = 0; indexVectorUint32_t < (bigIntVectorUint16_t.size() >> 1); ++indexVectorUint32_t)
-    {
-        vectorUint32_t.emplace_back(static_cast<uint32_t>(*iteratorVectorUint16_t) |
-                                    static_cast<uint32_t>(*(++iteratorVectorUint16_t)) << 16);
-        ++iteratorVectorUint16_t;
-    }
-    if(bigIntVectorUint16_t.size() & 1)
-    {
-        vectorUint32_t.emplace_back(static_cast<uint32_t>(*iteratorVectorUint16_t));
-    }
-    deleteZeroHighOrderDigit();
-    positive = isPositive;
+BigInt::BigInt(const std::vector<uint16_t>& vec, const bool is_positive_) {
+  digits_.reserve(vec.size() & 1 ? (vec.size() >> 1) + 1 : vec.size() >> 1);
+  auto it = vec.crbegin();
+  for (size_t i = 0; i < (vec.size() >> 1); ++i) {
+    digits_.emplace_back(static_cast<uint32_t>(*it) |
+                         static_cast<uint32_t>(*(++it)) << 16);
+    ++it;
+  }
+  if (vec.size() & 1) {
+    digits_.emplace_back(static_cast<uint32_t>(*it));
+  }
+  deleteZeroHighOrderDigit();
+  positive_ = is_positive_;
 }
 
-BigInt::BigInt(const std::vector<uint8_t>& bigIntVectorUint8_t, const bool isPositive)
-{
-    vectorUint32_t.reserve(bigIntVectorUint8_t.size() & 3 ? (bigIntVectorUint8_t.size() >> 2) + 1 : bigIntVectorUint8_t.size() >> 2);
-    std::vector<uint8_t>::const_reverse_iterator iteratorVectorUint8_t = bigIntVectorUint8_t.crbegin();
-    for(size_t indexVectorUint32_t = 0; indexVectorUint32_t < (bigIntVectorUint8_t.size() >> 2); ++indexVectorUint32_t)
-    {
-        vectorUint32_t.emplace_back(static_cast<uint32_t>(*iteratorVectorUint8_t) |
-                                    static_cast<uint32_t>(*(++iteratorVectorUint8_t)) << 8 |
-                                    static_cast<uint32_t>(*(++iteratorVectorUint8_t)) << 16 |
-                                    static_cast<uint32_t>(*(++iteratorVectorUint8_t)) << 24);
-        ++iteratorVectorUint8_t;
-    }
-    if((bigIntVectorUint8_t.size() & 3) == 3)
-    {
-        vectorUint32_t.emplace_back(static_cast<uint32_t>(*iteratorVectorUint8_t) |
-                                    static_cast<uint32_t>(*(++iteratorVectorUint8_t)) << 8 |
-                                    static_cast<uint32_t>(*(++iteratorVectorUint8_t)) << 16);
-    }
-    else if((bigIntVectorUint8_t.size() & 3) == 2)
-    {
-        vectorUint32_t.emplace_back(static_cast<uint32_t>(*iteratorVectorUint8_t) |
-                                    static_cast<uint32_t>(*(++iteratorVectorUint8_t)) << 8);
-    }
-    else if((bigIntVectorUint8_t.size() & 3) == 1)
-    {
-        vectorUint32_t.emplace_back(static_cast<uint32_t>(*iteratorVectorUint8_t));
-    }
-    deleteZeroHighOrderDigit();
-    positive = isPositive;
+BigInt::BigInt(const std::vector<uint8_t>& vec, const bool is_positive_) {
+  digits_.reserve(vec.size() & 3 ? (vec.size() >> 2) + 1 : vec.size() >> 2);
+  auto it = vec.crbegin();
+  for (size_t i = 0; i < (vec.size() >> 2); ++i) {
+    digits_.emplace_back(static_cast<uint32_t>(*it) |
+                         static_cast<uint32_t>(*(++it)) << 8 |
+                         static_cast<uint32_t>(*(++it)) << 16 |
+                         static_cast<uint32_t>(*(++it)) << 24);
+    ++it;
+  }
+  if ((vec.size() & 3) == 3) {
+    digits_.emplace_back(static_cast<uint32_t>(*it) |
+                         static_cast<uint32_t>(*(++it)) << 8 |
+                         static_cast<uint32_t>(*(++it)) << 16);
+  } else if ((vec.size() & 3) == 2) {
+    digits_.emplace_back(static_cast<uint32_t>(*it) |
+                         static_cast<uint32_t>(*(++it)) << 8);
+  } else if ((vec.size() & 3) == 1) {
+    digits_.emplace_back(static_cast<uint32_t>(*it));
+  }
+  deleteZeroHighOrderDigit();
+  positive_ = is_positive_;
 }
 
-BigInt::BigInt(const std::vector<bool>& bigIntVectorBool, const bool isPositive)
-{
-    vectorUint32_t.reserve(bigIntVectorBool.size() & 31 ? (bigIntVectorBool.size() >> 5) + 1 : bigIntVectorBool.size() >> 5);
-    uint32_t vectorUint32_t_element;
-    std::vector<bool>::const_reverse_iterator iteratorVectorBool = bigIntVectorBool.crbegin();
-    for(size_t indexVectorUint32_t = 0; indexVectorUint32_t < (bigIntVectorBool.size() >> 5); ++indexVectorUint32_t)
-    {
-        vectorUint32_t_element = 0;
-        for(uint8_t indexBit = 0; indexBit < 32; ++indexBit)
-        {
-            vectorUint32_t_element |= static_cast<uint32_t>(*iteratorVectorBool) << indexBit;
-            ++iteratorVectorBool;
-        }
-        vectorUint32_t.emplace_back(vectorUint32_t_element);
+BigInt::BigInt(const std::vector<bool>& vec, const bool is_positive_) {
+  digits_.reserve(vec.size() & 31 ? (vec.size() >> 5) + 1 : vec.size() >> 5);
+  uint32_t element;
+  auto it = vec.crbegin();
+  for (size_t i = 0; i < (vec.size() >> 5); ++i) {
+    element = 0;
+    for (uint8_t bit_idx = 0; bit_idx < 32; ++bit_idx) {
+      element |= static_cast<uint32_t>(*it) << bit_idx;
+      ++it;
     }
-    if(bigIntVectorBool.size() & 31)
-    {
-        vectorUint32_t_element = 0;
-        for(uint8_t indexBit = 0; indexBit < (bigIntVectorBool.size() & 31); ++indexBit)
-        {
-            vectorUint32_t_element |= static_cast<uint32_t>(*iteratorVectorBool) << indexBit;
-            ++iteratorVectorBool;
-        }
-        vectorUint32_t.emplace_back(vectorUint32_t_element);
+    digits_.emplace_back(element);
+  }
+  if (vec.size() & 31) {
+    element = 0;
+    for (uint8_t bit_idx = 0; bit_idx < (vec.size() & 31); ++bit_idx) {
+      element |= static_cast<uint32_t>(*it) << bit_idx;
+      ++it;
     }
-    deleteZeroHighOrderDigit();
-    positive = isPositive;
+    digits_.emplace_back(element);
+  }
+  deleteZeroHighOrderDigit();
+  positive_ = is_positive_;
 }
 
-BigInt::BigInt(const uint64_t bigIntUint64_t, const bool isPositive)
-{
-    vectorUint32_t.emplace_back(static_cast<uint32_t>(bigIntUint64_t & UINT32_MAX));
-    vectorUint32_t.emplace_back(static_cast<uint32_t>(bigIntUint64_t >> 32));
-    positive = isPositive;
+BigInt::BigInt(const uint64_t value, const bool is_positive_) {
+  digits_.emplace_back(static_cast<uint32_t>(value & UINT32_MAX));
+  digits_.emplace_back(static_cast<uint32_t>(value >> 32));
+  positive_ = is_positive_;
 }
 
-BigInt::BigInt(const uint32_t bigIntUint32_t, const bool isPositive)
-{
-    vectorUint32_t.emplace_back(bigIntUint32_t);
-    positive = isPositive;
+BigInt::BigInt(const uint32_t value, const bool is_positive_) {
+  digits_.emplace_back(value);
+  positive_ = is_positive_;
 }
 
-BigInt::BigInt(const int64_t bigIntInt64_t)
-{
-    const auto absValue = static_cast<uint64_t>(std::abs(bigIntInt64_t));
-    vectorUint32_t.emplace_back(static_cast<uint32_t>(absValue & UINT32_MAX));
-    vectorUint32_t.emplace_back(static_cast<uint32_t>(absValue >> 32));
-    positive = (bigIntInt64_t >= 0);
+BigInt::BigInt(const int64_t value) {
+  const auto abs_value = static_cast<uint64_t>(std::abs(value));
+  digits_.emplace_back(static_cast<uint32_t>(abs_value & UINT32_MAX));
+  digits_.emplace_back(static_cast<uint32_t>(abs_value >> 32));
+  positive_ = (value >= 0);
 }
 
-BigInt::BigInt(const int32_t bigIntInt32_t)
-{
-    vectorUint32_t.emplace_back(static_cast<uint32_t>(std::abs(bigIntInt32_t)));
-    positive = (bigIntInt32_t >= 0);
+BigInt::BigInt(const int32_t value) {
+  digits_.emplace_back(static_cast<uint32_t>(std::abs(value)));
+  positive_ = (value >= 0);
 }
 
-BigInt& BigInt::operator = (const BigInt& equal)
-{
-    vectorUint32_t = equal.vectorUint32_t;
-    positive = equal.positive;
-    return *this;
+BigInt& BigInt::operator=(const BigInt& other) {
+  digits_ = other.digits_;
+  positive_ = other.positive_;
+  return *this;
 }
 
 BigInt BigInt::operator +() const
@@ -219,21 +215,21 @@ BigInt BigInt::operator +() const
 
 BigInt BigInt::operator + (const BigInt& addend) const
 {
-    if(positive && addend.positive)
+    if(positive_ && addend.positive_)
     {
         BigInt sum;
         uint32_t carry = 0;
         uint64_t sum_temp;
-        bool augendGreater = (vectorUint32_t.size() >= addend.vectorUint32_t.size());
-        sum.vectorUint32_t.reserve(augendGreater ? vectorUint32_t.size() + 1 : addend.vectorUint32_t.size() + 1);
-        std::vector<uint32_t>::const_iterator iteratorAugend = augendGreater ? vectorUint32_t.cbegin() : addend.vectorUint32_t.cbegin();
-        std::vector<uint32_t>::const_iterator iteratorAddend = augendGreater ? addend.vectorUint32_t.cbegin() : vectorUint32_t.cbegin();
-        std::vector<uint32_t>::const_iterator iteratorAugendEnd = augendGreater ? vectorUint32_t.cend() : addend.vectorUint32_t.cend();
-        std::vector<uint32_t>::const_iterator iteratorAddendEnd = augendGreater ? addend.vectorUint32_t.cend() : vectorUint32_t.cend();
+        bool augendGreater = (digits_.size() >= addend.digits_.size());
+        sum.digits_.reserve(augendGreater ? digits_.size() + 1 : addend.digits_.size() + 1);
+        std::vector<uint32_t>::const_iterator iteratorAugend = augendGreater ? digits_.cbegin() : addend.digits_.cbegin();
+        std::vector<uint32_t>::const_iterator iteratorAddend = augendGreater ? addend.digits_.cbegin() : digits_.cbegin();
+        std::vector<uint32_t>::const_iterator iteratorAugendEnd = augendGreater ? digits_.cend() : addend.digits_.cend();
+        std::vector<uint32_t>::const_iterator iteratorAddendEnd = augendGreater ? addend.digits_.cend() : digits_.cend();
         while(iteratorAddend != iteratorAddendEnd)
         {
             sum_temp = static_cast<uint64_t>(*iteratorAugend) + static_cast<uint64_t>(*iteratorAddend) + static_cast<uint64_t>(carry);
-            sum.vectorUint32_t.emplace_back(static_cast<uint32_t>(sum_temp & UINT32_MAX));
+            sum.digits_.emplace_back(static_cast<uint32_t>(sum_temp & UINT32_MAX));
             carry = static_cast<uint32_t>(sum_temp >> 32);
             ++iteratorAugend;
             ++iteratorAddend;
@@ -241,26 +237,26 @@ BigInt BigInt::operator + (const BigInt& addend) const
         while(iteratorAugend != iteratorAugendEnd)
         {
             sum_temp = static_cast<uint64_t>(*iteratorAugend) + static_cast<uint64_t>(carry);
-            sum.vectorUint32_t.emplace_back(static_cast<uint32_t>(sum_temp & UINT32_MAX));
+            sum.digits_.emplace_back(static_cast<uint32_t>(sum_temp & UINT32_MAX));
             carry = static_cast<uint32_t>(sum_temp >> 32);
             ++iteratorAugend;
         }
         if(carry)
         {
-            sum.vectorUint32_t.emplace_back(carry);
+            sum.digits_.emplace_back(carry);
         }
-        sum.positive = true;
+        sum.positive_ = true;
         return sum;
     }
-    else if(positive && !addend.positive)
+    else if(positive_ && !addend.positive_)
     {
         return *this - abs(addend);
     }
-    else if(!positive && addend.positive)
+    else if(!positive_ && addend.positive_)
     {
         return addend - abs(*this);
     }
-    else // !positive && !addend.positive
+    else // !positive_ && !addend.positive_
     {
         return -(abs(*this) + abs(addend));
     }
@@ -274,7 +270,7 @@ BigInt& BigInt::operator += (const BigInt& augend)
 
 BigInt& BigInt::operator ++()
 {
-    *this += constants::One;
+    *this += constants::kOne;
     return *this;
 }
 
@@ -288,55 +284,55 @@ BigInt BigInt::operator ++(int)
 BigInt BigInt::operator -() const
 {
     BigInt negative = *this;
-    negative.positive = !positive;
+    negative.positive_ = !positive_;
     return negative;
 }
 
 BigInt BigInt::operator - (const BigInt& subtrahend) const
 {
-    if(positive && subtrahend.positive)
+    if(positive_ && subtrahend.positive_)
     {
         if(*this >= subtrahend)
         {
             BigInt difference;
             uint8_t borrow = 0;
             int64_t difference_temp;
-            difference.vectorUint32_t.reserve(vectorUint32_t.size());
-            std::vector<uint32_t>::const_iterator iteratorMinuend = vectorUint32_t.cbegin();
-            std::vector<uint32_t>::const_iterator iteratorSubtrahend = subtrahend.vectorUint32_t.cbegin();
-            while(iteratorSubtrahend != subtrahend.vectorUint32_t.cend())
+            difference.digits_.reserve(digits_.size());
+            std::vector<uint32_t>::const_iterator iteratorMinuend = digits_.cbegin();
+            std::vector<uint32_t>::const_iterator iteratorSubtrahend = subtrahend.digits_.cbegin();
+            while(iteratorSubtrahend != subtrahend.digits_.cend())
             {
                 difference_temp = static_cast<int64_t>(*iteratorMinuend) - static_cast<int64_t>(*iteratorSubtrahend) - static_cast<int64_t>(borrow);
                 if(difference_temp >= 0)
                 {
-                    difference.vectorUint32_t.emplace_back(static_cast<uint32_t>(difference_temp));
+                    difference.digits_.emplace_back(static_cast<uint32_t>(difference_temp));
                     borrow = 0;
                 }
                 else // difference_temp < 0
                 {
-                    difference.vectorUint32_t.emplace_back(static_cast<uint32_t>(difference_temp + static_cast<int64_t>(basisCalcSys)));
+                    difference.digits_.emplace_back(static_cast<uint32_t>(difference_temp + static_cast<int64_t>(kBasisCalcSys)));
                     borrow = 1;
                 }
                 ++iteratorMinuend;
                 ++iteratorSubtrahend;
             }
-            while(iteratorMinuend != vectorUint32_t.cend())
+            while(iteratorMinuend != digits_.cend())
             {
                 difference_temp = static_cast<int64_t>(*iteratorMinuend) - static_cast<int64_t>(borrow);
                 if(difference_temp >= 0)
                 {
-                    difference.vectorUint32_t.emplace_back(static_cast<uint32_t>(difference_temp));
+                    difference.digits_.emplace_back(static_cast<uint32_t>(difference_temp));
                     borrow = 0;
                 }
                 else // difference_temp < 0
                 {
-                    difference.vectorUint32_t.emplace_back(static_cast<uint32_t>(difference_temp + static_cast<int64_t>(basisCalcSys)));
+                    difference.digits_.emplace_back(static_cast<uint32_t>(difference_temp + static_cast<int64_t>(kBasisCalcSys)));
                     borrow = 1;
                 }
                 ++iteratorMinuend;
             }
             difference.deleteZeroHighOrderDigit();
-            difference.positive = true;
+            difference.positive_ = true;
             return difference;
         }
         else // minuend < subtrahend
@@ -344,15 +340,15 @@ BigInt BigInt::operator - (const BigInt& subtrahend) const
             return -(subtrahend - *this);
         }
     }
-    else if(!positive && subtrahend.positive)
+    else if(!positive_ && subtrahend.positive_)
     {
         return -(abs(*this) + subtrahend);
     }
-    else if(positive && !subtrahend.positive)
+    else if(positive_ && !subtrahend.positive_)
     {
         return *this + abs(subtrahend);
     }
-    else // !positive && !subtrahend.positive
+    else // !positive_ && !subtrahend.positive_
     {
         return abs(subtrahend) - abs(*this);
     }
@@ -366,7 +362,7 @@ BigInt& BigInt::operator -= (const BigInt& subtrahend)
 
 BigInt& BigInt::operator -- ()
 {
-    *this -= constants::One;
+    *this -= constants::kOne;
     return *this;
 }
 
@@ -382,18 +378,18 @@ BigInt BigInt::operator * (const uint32_t multiplier) const
     BigInt product;
     uint32_t carry = 0;
     uint64_t product_temp;
-    product.vectorUint32_t.reserve(vectorUint32_t.size() + 1);
-    for(std::vector<uint32_t>::const_iterator iteratorMultiplicand = vectorUint32_t.cbegin(); iteratorMultiplicand != vectorUint32_t.cend(); ++iteratorMultiplicand)
+    product.digits_.reserve(digits_.size() + 1);
+    for(std::vector<uint32_t>::const_iterator iteratorMultiplicand = digits_.cbegin(); iteratorMultiplicand != digits_.cend(); ++iteratorMultiplicand)
     {
         product_temp = static_cast<uint64_t>(*iteratorMultiplicand) * static_cast<uint64_t>(multiplier) + static_cast<uint64_t>(carry);
-        product.vectorUint32_t.emplace_back(static_cast<uint32_t>(product_temp & UINT32_MAX));
+        product.digits_.emplace_back(static_cast<uint32_t>(product_temp & UINT32_MAX));
         carry = static_cast<uint32_t>(product_temp >> 32);
     }
     if(carry)
     {
-        product.vectorUint32_t.emplace_back(carry);
+        product.digits_.emplace_back(carry);
     }
-    product.positive = positive;
+    product.positive_ = positive_;
     return product;
 }
 
@@ -407,12 +403,12 @@ BigInt BigInt::operator * (const BigInt& multiplier) const
 {
     BigInt product(0);
     uint32_t shift = 0;
-    product.vectorUint32_t.reserve(vectorUint32_t.size() + multiplier.vectorUint32_t.size());
-    for(std::vector<uint32_t>::const_iterator iteratorMultiplier = multiplier.vectorUint32_t.cbegin(); iteratorMultiplier != multiplier.vectorUint32_t.cend(); ++iteratorMultiplier, ++shift)
+    product.digits_.reserve(digits_.size() + multiplier.digits_.size());
+    for(std::vector<uint32_t>::const_iterator iteratorMultiplier = multiplier.digits_.cbegin(); iteratorMultiplier != multiplier.digits_.cend(); ++iteratorMultiplier, ++shift)
     {
         product += (*this * *iteratorMultiplier).shiftDigitsToHigh(shift);
     }
-    product.positive = positive == multiplier.positive;
+    product.positive_ = positive_ == multiplier.positive_;
     return product;
 }
 
@@ -429,7 +425,7 @@ std::pair<BigInt, BigInt> BigInt::DivMod(const BigInt& divisor) const
     BigInt remainder(abs(*this));
     BigInt borrow;
     size_t differenceRemainderNDivisorbitLength;
-    fraction.vectorUint32_t.reserve(vectorUint32_t.size());
+    fraction.digits_.reserve(digits_.size());
     while(remainder >= abs(divisor))
     {
         differenceRemainderNDivisorbitLength = remainder.bitLength() - bitLengthDivisor;
@@ -440,13 +436,13 @@ std::pair<BigInt, BigInt> BigInt::DivMod(const BigInt& divisor) const
             --differenceRemainderNDivisorbitLength;
         }
         remainder -= borrow;
-        fraction += constants::One << differenceRemainderNDivisorbitLength; // 1 << n = 2 ^ n
+        fraction += constants::kOne << differenceRemainderNDivisorbitLength; // 1 << n = 2 ^ n
     }
-    fraction.positive = positive == divisor.positive;
-    remainder.positive = positive;
-    if(divisor.positive)
+    fraction.positive_ = positive_ == divisor.positive_;
+    remainder.positive_ = positive_;
+    if(divisor.positive_)
     {
-        while(!remainder.positive)
+        while(!remainder.positive_)
         {
             remainder += divisor;
         }
@@ -478,15 +474,15 @@ BigInt& BigInt::operator %= (const BigInt& divisor)
 
 BigInt pow(const BigInt& base, const BigInt& exponent)
 {
-    if(!exponent.positive)
+    if(!exponent.positive_)
     {
-        return constants::Zero;
+        return constants::kZero;
     }
     BigInt power(1);
-    power.vectorUint32_t.reserve(base.vectorUint32_t.size() * static_cast<size_t>(exponent));
+    power.digits_.reserve(base.digits_.size() * static_cast<size_t>(exponent));
     for(size_t indexBitExponent = exponent.bitLength() - 1; indexBitExponent > 0; --indexBitExponent)
     {
-        if(exponent.vectorUint32_t[indexBitExponent >> 5] & (1 << (indexBitExponent & 31)))
+        if(exponent.digits_[indexBitExponent >> 5] & (1 << (indexBitExponent & 31)))
         {
             power *= base;
         }
@@ -496,9 +492,9 @@ BigInt pow(const BigInt& base, const BigInt& exponent)
     {
         power *= base;
     }
-    if(!base.positive)
+    if(!base.positive_)
     {
-        power.positive = exponent.isEven();
+        power.positive_ = exponent.isEven();
     }
     return power;
 }
@@ -511,12 +507,12 @@ size_t log2(const BigInt& antilogarithm)
 /*BigInt powmod(BigInt base, const BigInt& exponent, const BigInt& divisor)
 {
     BigInt power(1);
-    power.vectorUint32_t.reserve(divisor.vectorUint32_t.size());
-    const BigInt mu = power.shiftDigitsToHigh(divisor.vectorUint32_t.size() * 2) / divisor;
+    power.digits_.reserve(divisor.digits_.size());
+    const BigInt mu = power.shiftDigitsToHigh(divisor.digits_.size() * 2) / divisor;
     const uint32_t bitLengthExponent = exponent.bitLength();
     for(size_t indexBitExponent = 0; indexBitExponent < bitLengthExponent; ++indexBitExponent)
     {
-        if(exponent.vectorUint32_t[indexBitExponent >> 5] & (1 << (indexBitExponent & 31)))
+        if(exponent.digits_[indexBitExponent >> 5] & (1 << (indexBitExponent & 31)))
         {
             power = BarrettReduction(power * base, divisor, mu);
         }
@@ -528,13 +524,13 @@ size_t log2(const BigInt& antilogarithm)
 BigInt powmod(const BigInt& base, const BigInt& exponent, const BigInt& divisor)
 {
     BigInt power(1);
-    power.vectorUint32_t.reserve(divisor.vectorUint32_t.size());
+    power.digits_.reserve(divisor.digits_.size());
     const size_t bitLen = exponent.bitLength();
     for(size_t i = 0; i < bitLen; ++i)
     {
         size_t indexBitExponent = bitLen - 1 - i;
         power = (power * power) % divisor;
-        if(exponent.vectorUint32_t[indexBitExponent >> 5] & (1 << (indexBitExponent & 31)))
+        if(exponent.digits_[indexBitExponent >> 5] & (1 << (indexBitExponent & 31)))
         {
             power = (power * base) % divisor;
         }
@@ -546,14 +542,14 @@ BigInt inversemod(BigInt dividend, const BigInt& divisor)
 {
     if(!divisor || !isCoprime(dividend, divisor))
     {
-        return constants::Zero;
+        return constants::kZero;
     }
     BigInt divisor_copy(divisor);
     BigInt fraction;
     BigInt x0(0);
     BigInt x1(1);
     BigInt x_temp;
-    while(dividend > constants::One)
+    while(dividend > constants::kOne)
     {
         fraction = dividend / divisor_copy;
         x_temp = divisor_copy;
@@ -563,7 +559,7 @@ BigInt inversemod(BigInt dividend, const BigInt& divisor)
         x0 = x1 - (fraction * x0);
         x1 = x_temp;
     }
-    if(!x1.positive)
+    if(!x1.positive_)
     {
         x1 += divisor;
     }
@@ -574,7 +570,7 @@ bool congruencemod(const BigInt& dividend1, const BigInt& dividend2, const BigIn
 {
     BigInt remainder1(dividend1 % divisor);
     BigInt remainder2(dividend2 % divisor);
-    while(!remainder1.positive)
+    while(!remainder1.positive_)
     {
         remainder1 += divisor;
     }
@@ -582,7 +578,7 @@ bool congruencemod(const BigInt& dividend1, const BigInt& dividend2, const BigIn
     {
         remainder1 -= divisor;
     }
-    while(!remainder2.positive)
+    while(!remainder2.positive_)
     {
         remainder2 += divisor;
     }
@@ -595,7 +591,7 @@ bool congruencemod(const BigInt& dividend1, const BigInt& dividend2, const BigIn
 
 bool isCoprime(const BigInt& bigInt1, const BigInt& bigInt2)
 {
-    return gcd(bigInt1, bigInt2) == constants::One;
+    return gcd(bigInt1, bigInt2) == constants::kOne;
 }
 
 int8_t symbolJacobi(BigInt bigInt1, BigInt bigInt2)
@@ -607,10 +603,10 @@ int8_t symbolJacobi(BigInt bigInt1, BigInt bigInt2)
     int8_t symbolJacobi = 1;
     size_t iterator = 0;
     BigInt bigInt3;
-    if(!bigInt1.positive)
+    if(!bigInt1.positive_)
     {
-        bigInt1.positive = true;
-        if(bigInt2 % constants::Four == constants::Three)
+        bigInt1.positive_ = true;
+        if(bigInt2 % constants::kFour == constants::kThree)
         {
             symbolJacobi = -symbolJacobi;
         }
@@ -625,12 +621,12 @@ int8_t symbolJacobi(BigInt bigInt1, BigInt bigInt2)
         }
         if(iterator % 2)
         {
-            if(bigInt2 % constants::Eight == constants::Three || bigInt2 % constants::Eight == constants::Five)
+            if(bigInt2 % constants::kEight == constants::kThree || bigInt2 % constants::kEight == constants::kFive)
             {
                 symbolJacobi = -symbolJacobi;
             }
         }
-        if(bigInt1 % constants::Four == constants::Three && bigInt2 % constants::Four == constants::Three)
+        if(bigInt1 % constants::kFour == constants::kThree && bigInt2 % constants::kFour == constants::kThree)
         {
             symbolJacobi = -symbolJacobi;
         }
@@ -643,37 +639,37 @@ int8_t symbolJacobi(BigInt bigInt1, BigInt bigInt2)
 
 BigInt BigInt::operator ~() const
 {
-    return -*this - constants::One;
+    return -*this - constants::kOne;
 }
 
 BigInt BigInt::operator & (const BigInt& rightBitwiseAND) const
 {
-    if(positive && rightBitwiseAND.positive)
+    if(positive_ && rightBitwiseAND.positive_)
     {
         BigInt bitwiseAND;
-        bitwiseAND.vectorUint32_t.reserve(std::min(vectorUint32_t.size(), rightBitwiseAND.vectorUint32_t.size()));
-        std::vector<uint32_t>::const_iterator iteratorLeftBitwiseAND = vectorUint32_t.cbegin();
-        std::vector<uint32_t>::const_iterator iteratorRightBitwiseAND = rightBitwiseAND.vectorUint32_t.cbegin();
-        while(iteratorLeftBitwiseAND != vectorUint32_t.cend() && iteratorRightBitwiseAND != rightBitwiseAND.vectorUint32_t.cend())
+        bitwiseAND.digits_.reserve(std::min(digits_.size(), rightBitwiseAND.digits_.size()));
+        std::vector<uint32_t>::const_iterator iteratorLeftBitwiseAND = digits_.cbegin();
+        std::vector<uint32_t>::const_iterator iteratorRightBitwiseAND = rightBitwiseAND.digits_.cbegin();
+        while(iteratorLeftBitwiseAND != digits_.cend() && iteratorRightBitwiseAND != rightBitwiseAND.digits_.cend())
         {
-            bitwiseAND.vectorUint32_t.emplace_back(*iteratorLeftBitwiseAND & *iteratorRightBitwiseAND);
+            bitwiseAND.digits_.emplace_back(*iteratorLeftBitwiseAND & *iteratorRightBitwiseAND);
             ++iteratorLeftBitwiseAND;
             ++iteratorRightBitwiseAND;
         }
-        bitwiseAND.positive = true;
+        bitwiseAND.positive_ = true;
         return bitwiseAND;
     }
-    else if(!positive && !rightBitwiseAND.positive)
+    else if(!positive_ && !rightBitwiseAND.positive_)
     {
-        return -(~*this | ~rightBitwiseAND) - constants::One;
+        return -(~*this | ~rightBitwiseAND) - constants::kOne;
     }
-    else if(positive && !rightBitwiseAND.positive)
+    else if(positive_ && !rightBitwiseAND.positive_)
     {
-        return (*this | ~rightBitwiseAND) + rightBitwiseAND + constants::One;
+        return (*this | ~rightBitwiseAND) + rightBitwiseAND + constants::kOne;
     }
-    else // !positive && rightBitwiseAnd.positive
+    else // !positive_ && rightBitwiseAnd.positive_
     {
-        return (~*this | rightBitwiseAND) + *this + constants::One;
+        return (~*this | rightBitwiseAND) + *this + constants::kOne;
     }
 }
 
@@ -685,38 +681,38 @@ BigInt& BigInt::operator &= (const BigInt& rightBitwiseAND)
 
 BigInt BigInt::operator | (const BigInt& rightBitwiseOR) const
 {
-    if(positive && rightBitwiseOR.positive)
+    if(positive_ && rightBitwiseOR.positive_)
     {
         BigInt bitwiseOR;
-        const bool leftBitwiseORGreater = (vectorUint32_t.size() >= rightBitwiseOR.vectorUint32_t.size());
-        bitwiseOR.vectorUint32_t.reserve(leftBitwiseORGreater ? vectorUint32_t.size() + 1 : rightBitwiseOR.vectorUint32_t.size() + 1);
-        std::vector<uint32_t>::const_iterator iteratorLeftBitwiseOR = leftBitwiseORGreater ? vectorUint32_t.cbegin() : rightBitwiseOR.vectorUint32_t.cbegin();
-        std::vector<uint32_t>::const_iterator iteratorRightBitwiseOR = leftBitwiseORGreater ? rightBitwiseOR.vectorUint32_t.cbegin() : vectorUint32_t.cbegin();
-        std::vector<uint32_t>::const_iterator iteratorLeftBitwiseOREnd = leftBitwiseORGreater ? vectorUint32_t.cend() : rightBitwiseOR.vectorUint32_t.cend();
-        std::vector<uint32_t>::const_iterator iteratorRightBitwiseOREnd = leftBitwiseORGreater ? rightBitwiseOR.vectorUint32_t.cend() : vectorUint32_t.cend();
+        const bool leftBitwiseORGreater = (digits_.size() >= rightBitwiseOR.digits_.size());
+        bitwiseOR.digits_.reserve(leftBitwiseORGreater ? digits_.size() + 1 : rightBitwiseOR.digits_.size() + 1);
+        std::vector<uint32_t>::const_iterator iteratorLeftBitwiseOR = leftBitwiseORGreater ? digits_.cbegin() : rightBitwiseOR.digits_.cbegin();
+        std::vector<uint32_t>::const_iterator iteratorRightBitwiseOR = leftBitwiseORGreater ? rightBitwiseOR.digits_.cbegin() : digits_.cbegin();
+        std::vector<uint32_t>::const_iterator iteratorLeftBitwiseOREnd = leftBitwiseORGreater ? digits_.cend() : rightBitwiseOR.digits_.cend();
+        std::vector<uint32_t>::const_iterator iteratorRightBitwiseOREnd = leftBitwiseORGreater ? rightBitwiseOR.digits_.cend() : digits_.cend();
         while(iteratorRightBitwiseOR != iteratorRightBitwiseOREnd)
         {
-            bitwiseOR.vectorUint32_t.emplace_back(*iteratorLeftBitwiseOR | *iteratorRightBitwiseOR);
+            bitwiseOR.digits_.emplace_back(*iteratorLeftBitwiseOR | *iteratorRightBitwiseOR);
             ++iteratorLeftBitwiseOR;
             ++iteratorRightBitwiseOR;
         }
         while(iteratorLeftBitwiseOR != iteratorLeftBitwiseOREnd)
         {
-            bitwiseOR.vectorUint32_t.emplace_back(*iteratorLeftBitwiseOR);
+            bitwiseOR.digits_.emplace_back(*iteratorLeftBitwiseOR);
             ++iteratorLeftBitwiseOR;
         }
-        bitwiseOR.positive = true;
+        bitwiseOR.positive_ = true;
         return bitwiseOR;
     }
-    else if(!positive && !rightBitwiseOR.positive)
+    else if(!positive_ && !rightBitwiseOR.positive_)
     {
-        return -(~*this & ~rightBitwiseOR) - constants::One;
+        return -(~*this & ~rightBitwiseOR) - constants::kOne;
     }
-    else if(positive && !rightBitwiseOR.positive)
+    else if(positive_ && !rightBitwiseOR.positive_)
     {
         return (*this & ~rightBitwiseOR) + rightBitwiseOR;
     }
-    else // !positive && rightBitwiseOR.positive
+    else // !positive_ && rightBitwiseOR.positive_
     {
         return (~*this & rightBitwiseOR) + *this;
     }
@@ -730,30 +726,30 @@ BigInt& BigInt::operator |= (const BigInt& rightBitwiseOR)
 
 BigInt BigInt::operator ^ (const BigInt& rightBitwiseXOR) const
 {
-    if(positive && rightBitwiseXOR.positive)
+    if(positive_ && rightBitwiseXOR.positive_)
     {
         BigInt bitwiseXOR;
-        const bool leftBitwiseXORGreater = (vectorUint32_t.size() >= rightBitwiseXOR.vectorUint32_t.size());
-        bitwiseXOR.vectorUint32_t.reserve(leftBitwiseXORGreater ? vectorUint32_t.size() + 1 : rightBitwiseXOR.vectorUint32_t.size() + 1);
-        std::vector<uint32_t>::const_iterator iteratorLeftBitwiseXOR = leftBitwiseXORGreater ? vectorUint32_t.cbegin() : rightBitwiseXOR.vectorUint32_t.cbegin();
-        std::vector<uint32_t>::const_iterator iteratorRightBitwiseXOR = leftBitwiseXORGreater ? rightBitwiseXOR.vectorUint32_t.cbegin() : vectorUint32_t.cbegin();
-        std::vector<uint32_t>::const_iterator iteratorLeftBitwiseXOREnd = leftBitwiseXORGreater ? vectorUint32_t.cend() : rightBitwiseXOR.vectorUint32_t.cend();
-        std::vector<uint32_t>::const_iterator iteratorRightBitwiseXOREnd = leftBitwiseXORGreater ? rightBitwiseXOR.vectorUint32_t.cend() : vectorUint32_t.cend();
+        const bool leftBitwiseXORGreater = (digits_.size() >= rightBitwiseXOR.digits_.size());
+        bitwiseXOR.digits_.reserve(leftBitwiseXORGreater ? digits_.size() + 1 : rightBitwiseXOR.digits_.size() + 1);
+        std::vector<uint32_t>::const_iterator iteratorLeftBitwiseXOR = leftBitwiseXORGreater ? digits_.cbegin() : rightBitwiseXOR.digits_.cbegin();
+        std::vector<uint32_t>::const_iterator iteratorRightBitwiseXOR = leftBitwiseXORGreater ? rightBitwiseXOR.digits_.cbegin() : digits_.cbegin();
+        std::vector<uint32_t>::const_iterator iteratorLeftBitwiseXOREnd = leftBitwiseXORGreater ? digits_.cend() : rightBitwiseXOR.digits_.cend();
+        std::vector<uint32_t>::const_iterator iteratorRightBitwiseXOREnd = leftBitwiseXORGreater ? rightBitwiseXOR.digits_.cend() : digits_.cend();
         while(iteratorRightBitwiseXOR != iteratorRightBitwiseXOREnd)
         {
-            bitwiseXOR.vectorUint32_t.emplace_back(*iteratorLeftBitwiseXOR ^ *iteratorRightBitwiseXOR);
+            bitwiseXOR.digits_.emplace_back(*iteratorLeftBitwiseXOR ^ *iteratorRightBitwiseXOR);
             ++iteratorLeftBitwiseXOR;
             ++iteratorRightBitwiseXOR;
         }
         while(iteratorLeftBitwiseXOR != iteratorLeftBitwiseXOREnd)
         {
-            bitwiseXOR.vectorUint32_t.emplace_back(*iteratorLeftBitwiseXOR);
+            bitwiseXOR.digits_.emplace_back(*iteratorLeftBitwiseXOR);
             ++iteratorLeftBitwiseXOR;
         }
-        bitwiseXOR.positive = true;
+        bitwiseXOR.positive_ = true;
         return bitwiseXOR;
     }
-    else // !positive || !rightBitwiseXOR.positive
+    else // !positive_ || !rightBitwiseXOR.positive_
     {
         return (*this | rightBitwiseXOR) & (~*this | ~rightBitwiseXOR);
     }
@@ -772,21 +768,21 @@ BigInt BigInt::operator << (const size_t shift) const
         return *this;
     }
     BigInt shifted;
-    shifted.positive = positive;
+    shifted.positive_ = positive_;
     if(shift < 32)
     {
-        shifted.vectorUint32_t.reserve(vectorUint32_t.size() + 1);
+        shifted.digits_.reserve(digits_.size() + 1);
         uint32_t carry = 0;
         uint32_t shifted_temp = 0;
-        for(std::vector<uint32_t>::const_iterator iteratorShifting = vectorUint32_t.cbegin(); iteratorShifting != vectorUint32_t.cend(); ++iteratorShifting)
+        for(std::vector<uint32_t>::const_iterator iteratorShifting = digits_.cbegin(); iteratorShifting != digits_.cend(); ++iteratorShifting)
         {
             shifted_temp = (*iteratorShifting << shift) | carry;
             carry = *iteratorShifting >> (32 - shift);
-            shifted.vectorUint32_t.emplace_back(shifted_temp);
+            shifted.digits_.emplace_back(shifted_temp);
         }
         if(carry)
         {
-            shifted.vectorUint32_t.emplace_back(carry);
+            shifted.digits_.emplace_back(carry);
         }
         return shifted;
     }
@@ -815,22 +811,22 @@ BigInt BigInt::operator >> (const size_t shift) const
         return *this;
     }
     BigInt shifted;
-    shifted.positive = positive;
+    shifted.positive_ = positive_;
     if(shift < 32)
     {
-        shifted.vectorUint32_t.reserve(vectorUint32_t.size());
+        shifted.digits_.reserve(digits_.size());
         uint32_t carry = 0;
         uint32_t shifted_temp = 0;
         const uint32_t mask = static_cast<uint32_t>((1ULL << shift) - 1);  // Mask for lowest 'shift' bits
         // Process from high to low, building result in reverse order
-        for(std::vector<uint32_t>::const_reverse_iterator iteratorShifting = vectorUint32_t.crbegin(); iteratorShifting != vectorUint32_t.crend(); ++iteratorShifting)
+        for(std::vector<uint32_t>::const_reverse_iterator iteratorShifting = digits_.crbegin(); iteratorShifting != digits_.crend(); ++iteratorShifting)
         {
             shifted_temp = (*iteratorShifting >> shift) | carry;
             carry = (*iteratorShifting & mask) << (32 - shift);
-            shifted.vectorUint32_t.emplace_back(shifted_temp);
+            shifted.digits_.emplace_back(shifted_temp);
         }
         // Reverse to get correct order (low to high)
-        std::reverse(shifted.vectorUint32_t.begin(), shifted.vectorUint32_t.end());
+        std::reverse(shifted.digits_.begin(), shifted.digits_.end());
         shifted.deleteZeroHighOrderDigit();
         return shifted;
     }
@@ -855,22 +851,22 @@ BigInt& BigInt::operator >>= (const size_t shift)
 
 BigInt BigInt::leftCircularShift(const size_t shift) const
 {
-    const BigInt mask(--(constants::One << bitLength()));
+    const BigInt mask(--(constants::kOne << bitLength()));
     return (((*this << shift) | (*this >> (bitLength() - shift))) & mask);
 }
 
 BigInt BigInt::rightCircularShift(const size_t shift) const
 {
-    const BigInt mask(--(constants::One << bitLength()));
+    const BigInt mask(--(constants::kOne << bitLength()));
     return (((*this >> shift) | (*this << (bitLength() - shift))) & mask);
 }
 
 bool BigInt::operator !() const noexcept
 {
     {
-        for(std::vector<uint32_t>::const_iterator iteratorVectorUint32_t = vectorUint32_t.cbegin(); iteratorVectorUint32_t != vectorUint32_t.cend(); ++iteratorVectorUint32_t)
+        for(std::vector<uint32_t>::const_iterator iteratordigits_ = digits_.cbegin(); iteratordigits_ != digits_.cend(); ++iteratordigits_)
         {
-            if(*iteratorVectorUint32_t != 0)
+            if(*iteratordigits_ != 0)
             {
                 return false;
             }
@@ -893,29 +889,29 @@ bool BigInt::operator == (const BigInt& rightComparable) const noexcept
 {
     // Handle -0 == +0 case
     if (isZero() && rightComparable.isZero()) return true;
-    return (vectorUint32_t == rightComparable.vectorUint32_t && positive == rightComparable.positive);
+    return (digits_ == rightComparable.digits_ && positive_ == rightComparable.positive_);
 }
 
 bool BigInt::operator != (const BigInt& rightComparable) const noexcept
 {
     // Handle -0 == +0 case
     if (isZero() && rightComparable.isZero()) return false;
-    return (positive != rightComparable.positive || vectorUint32_t != rightComparable.vectorUint32_t);
+    return (positive_ != rightComparable.positive_ || digits_ != rightComparable.digits_);
 }
 
 int BigInt::compareMagnitude(const BigInt& other) const noexcept
 {
-    if (vectorUint32_t.size() > other.vectorUint32_t.size())
+    if (digits_.size() > other.digits_.size())
     {
         return 1;
     }
-    else if (vectorUint32_t.size() < other.vectorUint32_t.size())
+    else if (digits_.size() < other.digits_.size())
     {
         return -1;
     }
     // Same size - compare digit by digit from high to low
-    for (auto itLeft = vectorUint32_t.crbegin(), itRight = other.vectorUint32_t.crbegin();
-         itLeft != vectorUint32_t.crend(); ++itLeft, ++itRight)
+    for (auto itLeft = digits_.crbegin(), itRight = other.digits_.crbegin();
+         itLeft != digits_.crend(); ++itLeft, ++itRight)
     {
         if (*itLeft > *itRight) return 1;
         if (*itLeft < *itRight) return -1;
@@ -928,19 +924,19 @@ bool BigInt::operator < (const BigInt& rightComparable) const noexcept
     // Handle zero cases: 0 is never less than 0
     if (isZero() && rightComparable.isZero()) return false;
 
-    if (positive && rightComparable.positive)
+    if (positive_ && rightComparable.positive_)
     {
         return compareMagnitude(rightComparable) < 0;
     }
-    else if (positive && !rightComparable.positive)
+    else if (positive_ && !rightComparable.positive_)
     {
         return false;
     }
-    else if (!positive && rightComparable.positive)
+    else if (!positive_ && rightComparable.positive_)
     {
         return true;
     }
-    else // !positive && !rightComparable.positive
+    else // !positive_ && !rightComparable.positive_
     {
         // For negative numbers: -5 < -3 means |5| > |3|
         return compareMagnitude(rightComparable) > 0;
@@ -952,19 +948,19 @@ bool BigInt::operator > (const BigInt& rightComparable) const noexcept
     // Handle zero cases: 0 is never greater than 0
     if (isZero() && rightComparable.isZero()) return false;
 
-    if (positive && rightComparable.positive)
+    if (positive_ && rightComparable.positive_)
     {
         return compareMagnitude(rightComparable) > 0;
     }
-    else if (positive && !rightComparable.positive)
+    else if (positive_ && !rightComparable.positive_)
     {
         return true;
     }
-    else if (!positive && rightComparable.positive)
+    else if (!positive_ && rightComparable.positive_)
     {
         return false;
     }
-    else // !positive && !rightComparable.positive
+    else // !positive_ && !rightComparable.positive_
     {
         // For negative numbers: -3 > -5 means |3| < |5|
         return compareMagnitude(rightComparable) < 0;
@@ -984,7 +980,7 @@ bool BigInt::operator >= (const BigInt& rightComparable) const noexcept
 BigInt abs(const BigInt& bigInt)
 {
     BigInt absolute(bigInt);
-    absolute.positive = true;
+    absolute.positive_ = true;
     return absolute;
 }
 
@@ -1000,8 +996,8 @@ BigInt gcd(BigInt bigInt1, BigInt bigInt2)
     }
     BigInt greatestCommonDivisor(1);
     BigInt bigInt1_temp;
-    bigInt1.positive = true;
-    bigInt2.positive = true;
+    bigInt1.positive_ = true;
+    bigInt2.positive_ = true;
     while(bigInt1.isEven() && bigInt2.isEven())
     {
         bigInt1 >>= 1;
@@ -1041,11 +1037,10 @@ const BigInt& min(const BigInt& bigInt1, const BigInt& bigInt2) noexcept
     return bigInt1 < bigInt2 ? bigInt1 : bigInt2;
 }
 
-std::ostream& operator << (std::ostream& out, const BigInt& bigInt)
-{
-    std::string bigNumberString = bigInt.toStdString(BigInt::baseOutput);
-    out << bigNumberString;
-    return out;
+std::ostream& operator<<(std::ostream& out, const BigInt& value) {
+  std::string str = value.toStdString(kDefaultOutputBase);
+  out << str;
+  return out;
 }
 
 
@@ -1060,7 +1055,7 @@ std::istream& operator >> (std::istream& in, BigInt& bigInt)
 
 BigInt BarrettReduction(const BigInt& dividend, const BigInt& divisor, const BigInt& mu)
 {
-    BigInt remainder = dividend - ((dividend.shiftDigitsToLow(divisor.vectorUint32_t.size() - 1) * mu).shiftDigitsToLow(divisor.vectorUint32_t.size() + 1) * divisor);
+    BigInt remainder = dividend - ((dividend.shiftDigitsToLow(divisor.digits_.size() - 1) * mu).shiftDigitsToLow(divisor.digits_.size() + 1) * divisor);
     while(remainder >= divisor)
     {
         remainder -= divisor;
@@ -1072,46 +1067,40 @@ std::string BigInt::toStdString(const int base) const
 {
     std::stringstream bigNumberStringStream;
     std::string bigNumberString;
-    if(vectorUint32_t.empty() || !(*this))
+    if(digits_.empty() || !(*this))
     {
         return "0";
     }
-    if(!positive)
+    if(!positive_)
     {
         bigNumberStringStream << '-';
     }
-    if(base == baseBinary)
-    {
-        for(std::vector<uint32_t>::const_reverse_iterator iterator = vectorUint32_t.crbegin(); iterator != vectorUint32_t.crend(); ++iterator)
-        {
-            bigNumberStringStream << std::bitset<sizeof(uint32_t) * 8>(*iterator);
-        }
-    }
-    else if(base == baseHexadecimal)
-    {
-        for(std::vector<uint32_t>::const_reverse_iterator iterator = vectorUint32_t.crbegin(); iterator != vectorUint32_t.crend(); ++iterator)
-        {
-            bigNumberStringStream << std::hex << std::setw(8) << std::setfill('0') << *iterator;
-        }
-    }
-    else // base == baseDecimal
-    {
-        const BigInt bigNumberDec = toBigIntDec();
-        for(std::vector<uint32_t>::const_reverse_iterator iterator = bigNumberDec.vectorUint32_t.crbegin(); iterator != bigNumberDec.vectorUint32_t.crend(); ++iterator)
-        {
-            bigNumberStringStream << std::dec << std::setw(9) << std::setfill('0') << *iterator;
-        }
+    if (base == kBaseBinary) {
+      for (auto it = digits_.crbegin(); it != digits_.crend(); ++it) {
+        bigNumberStringStream << std::bitset<sizeof(uint32_t) * 8>(*it);
+      }
+    } else if (base == kBaseHexadecimal) {
+      for (auto it = digits_.crbegin(); it != digits_.crend(); ++it) {
+        bigNumberStringStream << std::hex << std::setw(8) << std::setfill('0')
+                              << *it;
+      }
+    } else {  // base == kBaseDecimal
+      const BigInt decimal_repr = toBigIntDec();
+      for (auto it = decimal_repr.digits_.crbegin();
+           it != decimal_repr.digits_.crend(); ++it) {
+        bigNumberStringStream << std::dec << std::setw(9) << std::setfill('0')
+                              << *it;
+      }
     }
     bigNumberString = bigNumberStringStream.str();
-    bigNumberString.erase(positive ? 0 : 1, bigNumberString.find_first_not_of("-0") - (positive ? 0 : 1));
+    bigNumberString.erase(positive_ ? 0 : 1, bigNumberString.find_first_not_of("-0") - (positive_ ? 0 : 1));
     return bigNumberString;
 }
 
-std::vector<uint32_t> BigInt::toStdVectorUint32_t() const
-{
-    std::vector<uint32_t> stdVectorUint32_t = vectorUint32_t;
-    std::reverse(stdVectorUint32_t.begin(), stdVectorUint32_t.end());
-    return stdVectorUint32_t;
+std::vector<uint32_t> BigInt::toStdVectorUint32_t() const {
+  std::vector<uint32_t> result = digits_;
+  std::reverse(result.begin(), result.end());
+  return result;
 }
 
 std::vector<uint8_t> BigInt::toStdVectorUint8_t() const
@@ -1119,7 +1108,7 @@ std::vector<uint8_t> BigInt::toStdVectorUint8_t() const
     std::vector<uint8_t> stdVectorUint8_t;
     size_t numberOfBytes = byteLength();
     stdVectorUint8_t.reserve(numberOfBytes);
-    std::vector<uint32_t>::const_reverse_iterator iterator = vectorUint32_t.crbegin();
+    std::vector<uint32_t>::const_reverse_iterator iterator = digits_.crbegin();
     if(numberOfBytes % sizeof(uint32_t))
     {
         for(size_t indexFirstBytes = 0; indexFirstBytes < numberOfBytes % sizeof(uint32_t); ++indexFirstBytes)
@@ -1128,7 +1117,7 @@ std::vector<uint8_t> BigInt::toStdVectorUint8_t() const
         }
         ++iterator;
     }
-    while(iterator != vectorUint32_t.crend())
+    while(iterator != digits_.crend())
     {
         for(uint8_t indexByte = 0; indexByte < sizeof(uint32_t); ++indexByte)
         {
@@ -1141,36 +1130,36 @@ std::vector<uint8_t> BigInt::toStdVectorUint8_t() const
 
 BigInt::operator uint64_t() const noexcept
 {
-    if(vectorUint32_t.size() >= 2)
+    if(digits_.size() >= 2)
     {
-        return (static_cast<uint64_t>(*std::next(vectorUint32_t.cbegin())) << 32) | static_cast<uint64_t>(*vectorUint32_t.cbegin());
+        return (static_cast<uint64_t>(*std::next(digits_.cbegin())) << 32) | static_cast<uint64_t>(*digits_.cbegin());
     }
     else
     {
-        return vectorUint32_t.front();
+        return digits_.front();
     }
 }
 
 BigInt::operator uint32_t() const noexcept
 {
-    return vectorUint32_t.front();
+    return digits_.front();
 }
 
 BigInt::operator uint16_t() const noexcept
 {
-    return static_cast<uint16_t>(vectorUint32_t.front());
+    return static_cast<uint16_t>(digits_.front());
 }
 
 BigInt::operator uint8_t() const noexcept
 {
-    return static_cast<uint8_t>(vectorUint32_t.front());
+    return static_cast<uint8_t>(digits_.front());
 }
 
 BigInt::operator bool() const noexcept
 {
-    for(std::vector<uint32_t>::const_iterator iteratorVectorUint32_t = vectorUint32_t.cbegin(); iteratorVectorUint32_t != vectorUint32_t.cend(); ++iteratorVectorUint32_t)
+    for(std::vector<uint32_t>::const_iterator iteratordigits_ = digits_.cbegin(); iteratordigits_ != digits_.cend(); ++iteratordigits_)
     {
-        if(*iteratorVectorUint32_t != 0)
+        if(*iteratordigits_ != 0)
         {
             return true;
         }
@@ -1184,8 +1173,8 @@ size_t BigInt::bitLength() const noexcept
     {
         return 1;
     }
-    size_t len = (vectorUint32_t.size() - 1) * sizeof(uint32_t) * 8;
-    uint32_t highOrderDigit = vectorUint32_t.back();
+    size_t len = (digits_.size() - 1) * sizeof(uint32_t) * 8;
+    uint32_t highOrderDigit = digits_.back();
     uint8_t highOrderBits = 0;
     while(highOrderDigit)
     {
@@ -1202,8 +1191,8 @@ size_t BigInt::byteLength() const noexcept
     {
         return 1;
     }
-    size_t len = (vectorUint32_t.size() - 1) * sizeof(uint32_t);
-    uint32_t highOrderDigit = vectorUint32_t.back();
+    size_t len = (digits_.size() - 1) * sizeof(uint32_t);
+    uint32_t highOrderDigit = digits_.back();
     uint8_t highOrderBytes = 0;
     while(highOrderDigit)
     {
@@ -1216,88 +1205,88 @@ size_t BigInt::byteLength() const noexcept
 
 bool BigInt::isZero() const noexcept
 {
-    return vectorUint32_t.empty() || (vectorUint32_t.size() == 1 && vectorUint32_t[0] == 0);
+    return digits_.empty() || (digits_.size() == 1 && digits_[0] == 0);
 }
 
 bool BigInt::isEven() const noexcept
 {
-    return !(vectorUint32_t.front() & 1);
+    return !(digits_.front() & 1);
 }
 
 bool BigInt::isOdd() const noexcept
 {
-    return vectorUint32_t.front() & 1;
+    return digits_.front() & 1;
 }
 
 bool BigInt::isPositive() const noexcept
 {
-    return positive;
+    return positive_;
 }
 
 bool BigInt::isNegative() const noexcept
 {
-    return !positive;
+    return !positive_;
 }
 
 void BigInt::alignTo(BigInt& aligned)
 {
-    if(vectorUint32_t.size() > aligned.vectorUint32_t.size())
+    if(digits_.size() > aligned.digits_.size())
     {
-        aligned.vectorUint32_t.reserve(vectorUint32_t.size());
-        aligned.vectorUint32_t.resize(vectorUint32_t.size(), 0);
+        aligned.digits_.reserve(digits_.size());
+        aligned.digits_.resize(digits_.size(), 0);
     }
-    else if(aligned.vectorUint32_t.size() > vectorUint32_t.size())
+    else if(aligned.digits_.size() > digits_.size())
     {
-        vectorUint32_t.reserve(aligned.vectorUint32_t.size());
-        vectorUint32_t.resize(aligned.vectorUint32_t.size(), 0);
+        digits_.reserve(aligned.digits_.size());
+        digits_.resize(aligned.digits_.size(), 0);
     }
 }
 
 void BigInt::deleteZeroHighOrderDigit()
 {
-    while(!vectorUint32_t.back() && vectorUint32_t.size() > 1)
+    while(!digits_.back() && digits_.size() > 1)
     {
-        vectorUint32_t.pop_back();
+        digits_.pop_back();
     }
 }
 
 BigInt BigInt::shiftDigitsToHigh(const size_t shift) const
 {
     BigInt shifted = *this;
-    shifted.vectorUint32_t.insert(shifted.vectorUint32_t.begin(), shift, 0);
+    shifted.digits_.insert(shifted.digits_.begin(), shift, 0);
     return shifted;
 }
 
 BigInt BigInt::shiftDigitsToLow(const size_t shift) const
 {
     BigInt shifted = *this;
-    if(shifted.vectorUint32_t.size() > shift)
+    if(shifted.digits_.size() > shift)
     {
-        shifted.vectorUint32_t.erase(shifted.vectorUint32_t.begin(), shifted.vectorUint32_t.begin() + static_cast<long>(shift));
+        shifted.digits_.erase(shifted.digits_.begin(), shifted.digits_.begin() + static_cast<long>(shift));
     }
-    else // shifted.vectorUint32_t.size() <= shift
+    else // shifted.digits_.size() <= shift
     {
-        shifted.vectorUint32_t.shrink_to_fit();
-        shifted.vectorUint32_t.reserve(1);
-        shifted.vectorUint32_t.emplace_back(0);
-        shifted.positive = true;
+        shifted.digits_.shrink_to_fit();
+        shifted.digits_.reserve(1);
+        shifted.digits_.emplace_back(0);
+        shifted.positive_ = true;
     }
     return shifted;
 }
 
 BigInt BigInt::toBigIntDec() const
 {
-    const BigInt basisCalcSysDec(1000000000);
+    const BigInt kBasisCalcSysDec(1000000000);
     BigInt bigNumber(*this);
     BigInt bigNumberDec;
-    std::pair<BigInt, BigInt> BigNumberDivModBasisCalcSysDec;
-    bigNumberDec.positive = positive;
-    bigNumberDec.vectorUint32_t.reserve(vectorUint32_t.size() + 1);
+    std::pair<BigInt, BigInt> BigNumberDivModkBasisCalcSysDec;
+    bigNumberDec.positive_ = positive_;
+    bigNumberDec.digits_.reserve(digits_.size() + 1);
     while(bigNumber)
     {
-        BigNumberDivModBasisCalcSysDec = bigNumber.DivMod(basisCalcSysDec);
-        bigNumberDec.vectorUint32_t.emplace_back(BigNumberDivModBasisCalcSysDec.second.vectorUint32_t.front());
-        bigNumber = BigNumberDivModBasisCalcSysDec.first;
+        BigNumberDivModkBasisCalcSysDec = bigNumber.DivMod(kBasisCalcSysDec);
+        bigNumberDec.digits_.emplace_back(BigNumberDivModkBasisCalcSysDec.second.digits_.front());
+        bigNumber = BigNumberDivModkBasisCalcSysDec.first;
     }
     return bigNumberDec;
 }
