@@ -7,6 +7,7 @@
 #include <bigint/Constants.hpp>
 
 #include <array>
+#include <compare>
 #include <cstdint>
 #include <iosfwd>
 #include <string>
@@ -163,12 +164,8 @@ class BigInt {
 
   /// @name Comparison Operators
   /// @{
-  bool operator==(const BigInt& rhs) const noexcept;
-  bool operator!=(const BigInt& rhs) const noexcept;
-  bool operator<(const BigInt& rhs) const noexcept;
-  bool operator>(const BigInt& rhs) const noexcept;
-  bool operator<=(const BigInt& rhs) const noexcept;
-  bool operator>=(const BigInt& rhs) const noexcept;
+  [[nodiscard]] std::strong_ordering operator<=>(const BigInt& rhs) const noexcept;
+  [[nodiscard]] bool operator==(const BigInt& rhs) const noexcept;
   /// @}
 
   /// @name Utility Functions

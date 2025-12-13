@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <bitset>
 #include <cmath>
+#include <compare>
 #include <iomanip>
 #include <sstream>
 
@@ -908,18 +909,37 @@ bool BigInt::operator || (const BigInt& rightOR) const noexcept
     return static_cast<bool>(*this) || static_cast<bool>(rightOR);
 }
 
-bool BigInt::operator == (const BigInt& rightComparable) const noexcept
+std::strong_ordering BigInt::operator<=>(const BigInt& rhs) const noexcept
 {
-    // Handle -0 == +0 case
-    if (isZero() && rightComparable.isZero()) return true;
-    return (digits_ == rightComparable.digits_ && positive_ == rightComparable.positive_);
+    // Handle zero cases: -0 == +0
+    const bool leftZero = isZero();
+    const bool rightZero = rhs.isZero();
+    if (leftZero && rightZero) return std::strong_ordering::equal;
+
+    // Different signs
+    if (positive_ && !rhs.positive_) return std::strong_ordering::greater;
+    if (!positive_ && rhs.positive_) return std::strong_ordering::less;
+
+    // Same sign - compare magnitudes
+    const int cmp = compareMagnitude(rhs);
+    if (positive_)
+    {
+        // Both positive: larger magnitude = greater
+        if (cmp > 0) return std::strong_ordering::greater;
+        if (cmp < 0) return std::strong_ordering::less;
+    }
+    else
+    {
+        // Both negative: larger magnitude = less (e.g., -5 < -3)
+        if (cmp > 0) return std::strong_ordering::less;
+        if (cmp < 0) return std::strong_ordering::greater;
+    }
+    return std::strong_ordering::equal;
 }
 
-bool BigInt::operator != (const BigInt& rightComparable) const noexcept
+bool BigInt::operator==(const BigInt& rhs) const noexcept
 {
-    // Handle -0 == +0 case
-    if (isZero() && rightComparable.isZero()) return false;
-    return (positive_ != rightComparable.positive_ || digits_ != rightComparable.digits_);
+    return (*this <=> rhs) == std::strong_ordering::equal;
 }
 
 int BigInt::compareMagnitude(const BigInt& other) const noexcept
@@ -940,64 +960,6 @@ int BigInt::compareMagnitude(const BigInt& other) const noexcept
         if (*itLeft < *itRight) return -1;
     }
     return 0;
-}
-
-bool BigInt::operator < (const BigInt& rightComparable) const noexcept
-{
-    // Handle zero cases: 0 is never less than 0
-    if (isZero() && rightComparable.isZero()) return false;
-
-    if (positive_ && rightComparable.positive_)
-    {
-        return compareMagnitude(rightComparable) < 0;
-    }
-    else if (positive_ && !rightComparable.positive_)
-    {
-        return false;
-    }
-    else if (!positive_ && rightComparable.positive_)
-    {
-        return true;
-    }
-    else // !positive_ && !rightComparable.positive_
-    {
-        // For negative numbers: -5 < -3 means |5| > |3|
-        return compareMagnitude(rightComparable) > 0;
-    }
-}
-
-bool BigInt::operator > (const BigInt& rightComparable) const noexcept
-{
-    // Handle zero cases: 0 is never greater than 0
-    if (isZero() && rightComparable.isZero()) return false;
-
-    if (positive_ && rightComparable.positive_)
-    {
-        return compareMagnitude(rightComparable) > 0;
-    }
-    else if (positive_ && !rightComparable.positive_)
-    {
-        return true;
-    }
-    else if (!positive_ && rightComparable.positive_)
-    {
-        return false;
-    }
-    else // !positive_ && !rightComparable.positive_
-    {
-        // For negative numbers: -3 > -5 means |3| < |5|
-        return compareMagnitude(rightComparable) < 0;
-    }
-}
-
-bool BigInt::operator <= (const BigInt& rightComparable) const noexcept
-{
-    return !(*this > rightComparable);
-}
-
-bool BigInt::operator >= (const BigInt& rightComparable) const noexcept
-{
-    return !(*this < rightComparable);
 }
 
 BigInt abs(const BigInt& bigInt)
