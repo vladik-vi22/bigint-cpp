@@ -1,3 +1,8 @@
+/**
+ * @file Constants.hpp
+ * @brief Public constants for the BigInt library.
+ */
+
 #pragma once
 
 #include <cstdint>
@@ -23,7 +28,7 @@ inline constexpr uint8_t kBaseHexadecimal = 16;
 inline constexpr uint8_t kDefaultInputBase = kBaseDecimal;
 
 /// Default base for output string conversion.
-inline constexpr int kDefaultOutputBase = kBaseDecimal;
+inline constexpr uint8_t kDefaultOutputBase = kBaseDecimal;
 
 /// @}
 
@@ -53,30 +58,7 @@ extern const BigInt kFive;
 /// BigInt constant representing eight.
 extern const BigInt kEight;
 
-// Legacy names for backward compatibility (deprecated)
-[[deprecated("Use kZero instead")]]
-extern const BigInt& Zero;
-
-[[deprecated("Use kOne instead")]]
-extern const BigInt& One;
-
-[[deprecated("Use kTwo instead")]]
-extern const BigInt& Two;
-
-[[deprecated("Use kThree instead")]]
-extern const BigInt& Three;
-
-[[deprecated("Use kFour instead")]]
-extern const BigInt& Four;
-
-[[deprecated("Use kFive instead")]]
-extern const BigInt& Five;
-
-[[deprecated("Use kEight instead")]]
-extern const BigInt& Eight;
-
 }  // namespace constants
 /// @}
 
 }  // namespace bigint
-

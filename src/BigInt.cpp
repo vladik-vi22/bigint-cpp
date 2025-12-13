@@ -63,15 +63,6 @@ const BigInt kFour(static_cast<uint32_t>(4));
 const BigInt kFive(static_cast<uint32_t>(5));
 const BigInt kEight(static_cast<uint32_t>(8));
 
-// Legacy aliases
-const BigInt& Zero = kZero;
-const BigInt& One = kOne;
-const BigInt& Two = kTwo;
-const BigInt& Three = kThree;
-const BigInt& Four = kFour;
-const BigInt& Five = kFive;
-const BigInt& Eight = kEight;
-
 }  // namespace constants
 
 BigInt::BigInt() {
@@ -80,6 +71,11 @@ BigInt::BigInt() {
 BigInt::BigInt(const BigInt& other) {
   digits_ = other.digits_;
   positive_ = other.positive_;
+}
+
+BigInt::BigInt(BigInt&& other) noexcept
+    : positive_(other.positive_), digits_(std::move(other.digits_)) {
+  other.positive_ = true;
 }
 
 BigInt::BigInt(std::string str, const uint8_t base) {
@@ -205,6 +201,13 @@ BigInt::BigInt(const int32_t value) {
 BigInt& BigInt::operator=(const BigInt& other) {
   digits_ = other.digits_;
   positive_ = other.positive_;
+  return *this;
+}
+
+BigInt& BigInt::operator=(BigInt&& other) noexcept {
+  digits_ = std::move(other.digits_);
+  positive_ = other.positive_;
+  other.positive_ = true;
   return *this;
 }
 
@@ -1063,7 +1066,7 @@ BigInt BarrettReduction(const BigInt& dividend, const BigInt& divisor, const Big
     return remainder;
 }
 
-std::string BigInt::toStdString(const int base) const
+std::string BigInt::toStdString(const uint8_t base) const
 {
     std::stringstream bigNumberStringStream;
     std::string bigNumberString;

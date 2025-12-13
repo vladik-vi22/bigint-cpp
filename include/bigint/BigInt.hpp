@@ -1,4 +1,8 @@
-﻿#pragma once
+/**
+ * @file BigInt.hpp
+ * @brief Arbitrary precision integer class.
+ */
+#pragma once
 
 #include <bigint/Constants.hpp>
 
@@ -28,6 +32,9 @@ class BigInt {
 
   /// @brief Copy constructor.
   BigInt(const BigInt& other);
+
+  /// @brief Move constructor.
+  BigInt(BigInt&& other) noexcept;
 
   /// @brief Construct from string representation.
   /// @param str Number as string (may include leading '-' for negative)
@@ -71,29 +78,30 @@ class BigInt {
   /// @name Assignment
   /// @{
   BigInt& operator=(const BigInt& other);
+  BigInt& operator=(BigInt&& other) noexcept;
   /// @}
 
   /// @name Arithmetic Operators
   /// @{
-  BigInt operator+() const;                       ///< Unary plus
-  BigInt operator+(const BigInt& addend) const;   ///< Addition
+  [[nodiscard]] BigInt operator+() const;                       ///< Unary plus
+  [[nodiscard]] BigInt operator+(const BigInt& addend) const;   ///< Addition
   BigInt& operator+=(const BigInt& addend);       ///< Addition assignment
   BigInt& operator++();                           ///< Pre-increment
   BigInt operator++(int);                         ///< Post-increment
 
-  BigInt operator-() const;                           ///< Unary minus (negation)
-  BigInt operator-(const BigInt& subtrahend) const;   ///< Subtraction
+  [[nodiscard]] BigInt operator-() const;                           ///< Unary minus (negation)
+  [[nodiscard]] BigInt operator-(const BigInt& subtrahend) const;   ///< Subtraction
   BigInt& operator-=(const BigInt& subtrahend);       ///< Subtraction assignment
   BigInt& operator--();                               ///< Pre-decrement
   BigInt operator--(int);                             ///< Post-decrement
 
-  BigInt operator*(const BigInt& multiplier) const;   ///< Multiplication
+  [[nodiscard]] BigInt operator*(const BigInt& multiplier) const;   ///< Multiplication
   BigInt& operator*=(const BigInt& multiplier);       ///< Multiplication assignment
 
-  BigInt operator/(const BigInt& divisor) const;      ///< Integer division
+  [[nodiscard]] BigInt operator/(const BigInt& divisor) const;      ///< Integer division
   BigInt& operator/=(const BigInt& divisor);          ///< Division assignment
 
-  BigInt operator%(const BigInt& divisor) const;      ///< Modulo (remainder)
+  [[nodiscard]] BigInt operator%(const BigInt& divisor) const;      ///< Modulo (remainder)
   BigInt& operator%=(const BigInt& divisor);          ///< Modulo assignment
   /// @}
 
@@ -113,7 +121,7 @@ class BigInt {
   /// @brief Compute modular multiplicative inverse.
   friend BigInt inversemod(BigInt dividend, const BigInt& divisor);
 
-  /// @brief Check if dividend1 ≡ dividend2 (mod divisor).
+  /// @brief Check if dividend1 = dividend2 (mod divisor).
   friend bool congruencemod(const BigInt& dividend1, const BigInt& dividend2,
                             BigInt divisor);
 
@@ -126,17 +134,17 @@ class BigInt {
 
   /// @name Bitwise Operators
   /// @{
-  BigInt operator~() const;                   ///< Bitwise NOT
-  BigInt operator&(const BigInt& rhs) const;  ///< Bitwise AND
+  [[nodiscard]] BigInt operator~() const;                   ///< Bitwise NOT
+  [[nodiscard]] BigInt operator&(const BigInt& rhs) const;  ///< Bitwise AND
   BigInt& operator&=(const BigInt& rhs);      ///< Bitwise AND assignment
-  BigInt operator|(const BigInt& rhs) const;  ///< Bitwise OR
+  [[nodiscard]] BigInt operator|(const BigInt& rhs) const;  ///< Bitwise OR
   BigInt& operator|=(const BigInt& rhs);      ///< Bitwise OR assignment
-  BigInt operator^(const BigInt& rhs) const;  ///< Bitwise XOR
+  [[nodiscard]] BigInt operator^(const BigInt& rhs) const;  ///< Bitwise XOR
   BigInt& operator^=(const BigInt& rhs);      ///< Bitwise XOR assignment
 
-  BigInt operator<<(size_t shift) const;  ///< Left shift
+  [[nodiscard]] BigInt operator<<(size_t shift) const;  ///< Left shift
   BigInt& operator<<=(size_t shift);      ///< Left shift assignment
-  BigInt operator>>(size_t shift) const;  ///< Right shift
+  [[nodiscard]] BigInt operator>>(size_t shift) const;  ///< Right shift
   BigInt& operator>>=(size_t shift);      ///< Right shift assignment
 
   /// @brief Circular left shift within current bit length.
@@ -182,7 +190,7 @@ class BigInt {
   /// @{
 
   /// @brief Convert to string in specified base (2, 10, or 16).
-  [[nodiscard]] std::string toStdString(int base = kDefaultOutputBase) const;
+  [[nodiscard]] std::string toStdString(uint8_t base = kDefaultOutputBase) const;
 
   /// @brief Convert to vector of 32-bit words (big-endian order).
   [[nodiscard]] std::vector<uint32_t> toStdVectorUint32_t() const;

@@ -168,7 +168,7 @@ TEST_F(BigIntBasicTest, ZeroOperations) {
 }
 
 TEST_F(BigIntBasicTest, OneOperations) {
-    BigInt one = constants::One;
+    BigInt one = constants::kOne;
     BigInt num("12345", 10);
 
     // Multiplication by one
