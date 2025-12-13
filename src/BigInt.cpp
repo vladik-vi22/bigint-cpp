@@ -774,35 +774,39 @@ BigInt BigInt::operator << (const size_t shift) const
     {
         return *this;
     }
+
+    // Split shift into digit shift (multiples of 32) and bit shift (remainder)
+    const size_t digitShift = shift / 32;
+    const size_t bitShift = shift % 32;
+
     BigInt shifted;
     shifted.positive_ = positive_;
-    if(shift < 32)
+    shifted.digits_.reserve(digits_.size() + digitShift + 1);
+
+    // Insert zeros for digit shift (these become the low-order digits)
+    shifted.digits_.resize(digitShift, 0);
+
+    // Perform bit shift on the remaining bits
+    if(bitShift == 0)
     {
-        shifted.digits_.reserve(digits_.size() + 1);
+        // No bit shift needed, just copy digits
+        shifted.digits_.insert(shifted.digits_.end(), digits_.begin(), digits_.end());
+    }
+    else
+    {
         uint32_t carry = 0;
-        uint32_t shifted_temp = 0;
-        for(std::vector<uint32_t>::const_iterator iteratorShifting = digits_.cbegin(); iteratorShifting != digits_.cend(); ++iteratorShifting)
+        for(auto it = digits_.cbegin(); it != digits_.cend(); ++it)
         {
-            shifted_temp = (*iteratorShifting << shift) | carry;
-            carry = *iteratorShifting >> (32 - shift);
+            uint32_t shifted_temp = (*it << bitShift) | carry;
+            carry = *it >> (32 - bitShift);
             shifted.digits_.emplace_back(shifted_temp);
         }
         if(carry)
         {
             shifted.digits_.emplace_back(carry);
         }
-        return shifted;
     }
-    else // shift >= 32
-    {
-        shifted = *this;
-        for(size_t indexShift = 0; indexShift < shift / (32 - 1); ++indexShift)
-        {
-            shifted <<= (32 - 1);
-        }
-        shifted <<= (shift % (32 - 1));
-        return shifted;
-    }
+    return shifted;
 }
 
 BigInt& BigInt::operator <<= (const size_t shift)
@@ -818,37 +822,48 @@ BigInt BigInt::operator >> (const size_t shift) const
     {
         return *this;
     }
+
+    // Split shift into digit shift (multiples of 32) and bit shift (remainder)
+    const size_t digitShift = shift / 32;
+    const size_t bitShift = shift % 32;
+
+    // If we're shifting away all digits, return zero
+    if(digitShift >= digits_.size())
+    {
+        return BigInt(0);
+    }
+
     BigInt shifted;
     shifted.positive_ = positive_;
-    if(shift < 32)
+
+    // Skip the low-order digits that are shifted away
+    const size_t remainingDigits = digits_.size() - digitShift;
+    shifted.digits_.reserve(remainingDigits);
+
+    if(bitShift == 0)
     {
-        shifted.digits_.reserve(digits_.size());
-        uint32_t carry = 0;
-        uint32_t shifted_temp = 0;
-        const uint32_t mask = static_cast<uint32_t>((1ULL << shift) - 1);  // Mask for lowest 'shift' bits
+        // No bit shift needed, just copy remaining digits
+        shifted.digits_.insert(shifted.digits_.end(),
+                               digits_.begin() + static_cast<long>(digitShift),
+                               digits_.end());
+    }
+    else
+    {
+        const uint32_t mask = static_cast<uint32_t>((1ULL << bitShift) - 1);
         // Process from high to low, building result in reverse order
-        for(std::vector<uint32_t>::const_reverse_iterator iteratorShifting = digits_.crbegin(); iteratorShifting != digits_.crend(); ++iteratorShifting)
+        uint32_t carry = 0;
+        for(auto it = digits_.crbegin(); it != digits_.crend() - static_cast<long>(digitShift); ++it)
         {
-            shifted_temp = (*iteratorShifting >> shift) | carry;
-            carry = (*iteratorShifting & mask) << (32 - shift);
+            uint32_t shifted_temp = (*it >> bitShift) | carry;
+            carry = (*it & mask) << (32 - bitShift);
             shifted.digits_.emplace_back(shifted_temp);
         }
         // Reverse to get correct order (low to high)
         std::reverse(shifted.digits_.begin(), shifted.digits_.end());
-        shifted.deleteZeroHighOrderDigit();
-        return shifted;
     }
-    else // shift >= 32
-    {
-        shifted = *this;
-        for(uint32_t indexShift = 0; indexShift < shift / (32 - 1); ++indexShift)
-        {
-            shifted >>= (32 - 1);
-        }
-        shifted >>= (shift % (32 - 1));
-        shifted.deleteZeroHighOrderDigit();
-        return shifted;
-    }
+
+    shifted.deleteZeroHighOrderDigit();
+    return shifted;
 }
 
 BigInt& BigInt::operator >>= (const size_t shift)
