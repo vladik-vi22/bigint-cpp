@@ -113,11 +113,10 @@ BigInt::BigInt(std::string str, const uint8_t base) {
   }
 }
 
-BigInt::BigInt(const std::vector<uint32_t>& vec, const bool is_positive_) {
-  digits_ = vec;
+BigInt::BigInt(const std::vector<uint32_t>& vec, const bool is_positive_)
+    : positive_(is_positive_), digits_(vec) {
   std::reverse(digits_.begin(), digits_.end());
   deleteZeroHighOrderDigit();
-  positive_ = is_positive_;
 }
 
 BigInt::BigInt(const std::vector<uint16_t>& vec, const bool is_positive_) {
@@ -183,27 +182,27 @@ BigInt::BigInt(const std::vector<bool>& vec, const bool is_positive_) {
   positive_ = is_positive_;
 }
 
-BigInt::BigInt(const uint64_t value, const bool is_positive_) {
+BigInt::BigInt(const uint64_t value, const bool is_positive_)
+    : positive_(is_positive_) {
+  digits_.reserve(2);
   digits_.emplace_back(static_cast<uint32_t>(value & UINT32_MAX));
   digits_.emplace_back(static_cast<uint32_t>(value >> 32));
-  positive_ = is_positive_;
 }
 
-BigInt::BigInt(const uint32_t value, const bool is_positive_) {
-  digits_.emplace_back(value);
-  positive_ = is_positive_;
+BigInt::BigInt(const uint32_t value, const bool is_positive_)
+    : positive_(is_positive_), digits_{value} {
 }
 
-BigInt::BigInt(const int64_t value) {
+BigInt::BigInt(const int64_t value)
+    : positive_(value >= 0) {
   const auto abs_value = static_cast<uint64_t>(std::abs(value));
+  digits_.reserve(2);
   digits_.emplace_back(static_cast<uint32_t>(abs_value & UINT32_MAX));
   digits_.emplace_back(static_cast<uint32_t>(abs_value >> 32));
-  positive_ = (value >= 0);
 }
 
-BigInt::BigInt(const int32_t value) {
-  digits_.emplace_back(static_cast<uint32_t>(std::abs(value)));
-  positive_ = (value >= 0);
+BigInt::BigInt(const int32_t value)
+    : positive_(value >= 0), digits_{static_cast<uint32_t>(std::abs(value))} {
 }
 
 BigInt& BigInt::operator=(const BigInt& other) {
