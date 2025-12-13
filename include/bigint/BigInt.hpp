@@ -199,6 +199,17 @@ class BigInt {
   /// @return Random BigInt in range [0, max).
   [[nodiscard]] static BigInt randomBelow(const BigInt& max);
 
+  /// @brief Generate a random prime number with specified bit length.
+  /// @details Uses randomBits() to generate candidates, filters by small primes,
+  ///          then verifies with isProbablePrime(). Guaranteed to have exactly numBits bits.
+  /// @param numBits Number of bits in the result (must be >= 2).
+  /// @return Random prime with exactly numBits bits.
+  [[nodiscard]] static BigInt randomPrime(size_t numBits);
+
+  /// @brief Find the next prime >= this value.
+  /// @return Smallest prime >= *this.
+  [[nodiscard]] BigInt nextPrime() const;
+
   /// @}
 
   /// @name Stream I/O

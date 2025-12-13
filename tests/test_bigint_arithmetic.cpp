@@ -443,3 +443,41 @@ TEST_F(BigIntArithmeticTest, DigitCount) {
     EXPECT_EQ(large.digitCount(), 9);  // 257 bits = 9 x 32-bit words
 }
 
+TEST_F(BigIntArithmeticTest, RandomPrime16Bit) {
+    BigInt prime = BigInt::randomPrime(16);
+    EXPECT_EQ(prime.bitLength(), 16);
+    EXPECT_TRUE(prime.isProbablePrime());
+    EXPECT_TRUE(prime.isOdd());
+}
+
+TEST_F(BigIntArithmeticTest, RandomPrimeSmall) {
+    BigInt p2 = BigInt::randomPrime(2);
+    EXPECT_TRUE(p2 == BigInt(2) || p2 == BigInt(3));
+
+    BigInt p3 = BigInt::randomPrime(3);
+    EXPECT_EQ(p3.bitLength(), 3);
+    EXPECT_TRUE(p3.isProbablePrime());
+}
+
+TEST_F(BigIntArithmeticTest, NextPrime) {
+    EXPECT_EQ(BigInt(0).nextPrime(), BigInt(2));
+    EXPECT_EQ(BigInt(1).nextPrime(), BigInt(2));
+    EXPECT_EQ(BigInt(2).nextPrime(), BigInt(2));
+    EXPECT_EQ(BigInt(3).nextPrime(), BigInt(3));
+    EXPECT_EQ(BigInt(4).nextPrime(), BigInt(5));
+    EXPECT_EQ(BigInt(10).nextPrime(), BigInt(11));
+    EXPECT_EQ(BigInt(100).nextPrime(), BigInt(101));
+    EXPECT_EQ(BigInt(1000).nextPrime(), BigInt(1009));
+}
+
+TEST_F(BigIntArithmeticTest, NextPrimeLarge) {
+    // Next prime after 10000
+    BigInt prime = BigInt(10000).nextPrime();
+    EXPECT_EQ(prime, BigInt(10007));
+    EXPECT_TRUE(prime.isProbablePrime());
+
+    // Next prime after 1000000
+    prime = BigInt(1000000).nextPrime();
+    EXPECT_EQ(prime, BigInt(1000003));
+}
+

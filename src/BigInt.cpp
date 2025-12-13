@@ -1,6 +1,7 @@
 #include <bigint/BigInt.hpp>
 
 #include <algorithm>
+#include <array>
 #include <bitset>
 #include <cmath>
 #include <compare>
@@ -16,6 +17,12 @@ namespace {
 constexpr uint64_t kBasisCalcSys = 1ULL << 32;  // 2^32 for carry calculations
 constexpr uint32_t kBasisCalcDec = 1000000000;  // 10^9 for decimal conversion
 constexpr uint8_t kDecimalCellSize = 9;         // Digits per decimal cell
+
+// Small primes for quick divisibility rejection in prime generation
+constexpr auto kSmallPrimes = std::to_array<uint32_t>({
+    3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47,
+    53, 59, 61, 67, 71, 73, 79, 83, 89, 97, 101, 103, 107, 109, 113
+});
 
 /// Converts a decimal string to a binary string.
 /// Internal helper function for string constructor.
@@ -1202,6 +1209,73 @@ BigInt BigInt::randomBelow(const BigInt& max)
     } while (result >= max);
 
     return result;
+}
+
+BigInt BigInt::randomPrime(size_t numBits)
+{
+    if (numBits < 2) return BigInt(2);
+    if (numBits == 2) return BigInt(rand() % 2 ? 2 : 3);
+
+    while (true) {
+        // Generate random odd number with exactly numBits bits
+        BigInt candidate = randomBits(numBits);
+
+        // Make it odd
+        if (candidate.isEven()) {
+            candidate.digits_[0] |= 1;
+        }
+
+        // Quick rejection by small primes
+        bool divisible = false;
+        for (uint32_t p : kSmallPrimes) {
+            if (candidate == BigInt(p)) {
+                return candidate;  // It's a small prime itself
+            }
+            if ((candidate % BigInt(p)).isZero()) {
+                divisible = true;
+                break;
+            }
+        }
+
+        if (divisible) continue;
+
+        // Full primality test
+        if (candidate.isProbablePrime()) {
+            return candidate;
+        }
+    }
+}
+
+BigInt BigInt::nextPrime() const
+{
+    if (*this <= BigInt(2)) return BigInt(2);
+    if (*this == BigInt(3)) return BigInt(3);
+
+    // Start with odd number >= *this
+    BigInt candidate = *this;
+    if (candidate.isEven()) {
+        candidate += BigInt(1);
+    }
+
+    while (true) {
+        // Quick rejection by small primes
+        bool divisible = false;
+        for (uint32_t p : kSmallPrimes) {
+            if (candidate == BigInt(p)) {
+                return candidate;
+            }
+            if ((candidate % BigInt(p)).isZero()) {
+                divisible = true;
+                break;
+            }
+        }
+
+        if (!divisible && candidate.isProbablePrime()) {
+            return candidate;
+        }
+
+        candidate += BigInt(2);  // Next odd number
+    }
 }
 
 std::ostream& operator<<(std::ostream& out, const BigInt& value) {
