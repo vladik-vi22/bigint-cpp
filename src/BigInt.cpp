@@ -1134,29 +1134,30 @@ std::vector<uint8_t> BigInt::toStdVectorUint8_t() const
 
 BigInt::operator uint64_t() const noexcept
 {
+    if(digits_.empty())
+    {
+        return 0;
+    }
     if(digits_.size() >= 2)
     {
         return (static_cast<uint64_t>(*std::next(digits_.cbegin())) << 32) | static_cast<uint64_t>(*digits_.cbegin());
     }
-    else
-    {
-        return digits_.front();
-    }
+    return digits_.front();
 }
 
 BigInt::operator uint32_t() const noexcept
 {
-    return digits_.front();
+    return digits_.empty() ? 0 : digits_.front();
 }
 
 BigInt::operator uint16_t() const noexcept
 {
-    return static_cast<uint16_t>(digits_.front());
+    return digits_.empty() ? static_cast<uint16_t>(0) : static_cast<uint16_t>(digits_.front());
 }
 
 BigInt::operator uint8_t() const noexcept
 {
-    return static_cast<uint8_t>(digits_.front());
+    return digits_.empty() ? static_cast<uint8_t>(0) : static_cast<uint8_t>(digits_.front());
 }
 
 BigInt::operator bool() const noexcept
