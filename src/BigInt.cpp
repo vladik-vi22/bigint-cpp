@@ -1547,7 +1547,7 @@ BigInt BigInt::shiftDigitsToLow(const size_t shift) const
 BigInt BigInt::toBigIntDec() const
 {
     const BigInt kBasisCalcSysDec(1000000000);
-    BigInt bigNumber(*this);
+    BigInt bigNumber = abs(*this);  // Work with absolute value
     BigInt bigNumberDec;
     std::pair<BigInt, BigInt> BigNumberDivModkBasisCalcSysDec;
     bigNumberDec.positive_ = positive_;

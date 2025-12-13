@@ -481,3 +481,77 @@ TEST_F(BigIntArithmeticTest, NextPrimeLarge) {
     EXPECT_EQ(prime, BigInt(1000003));
 }
 
+TEST_F(BigIntArithmeticTest, DivisionEdgeCases) {
+    // Division of zero by non-zero
+    BigInt zero(0);
+    BigInt nonZero(100);
+    EXPECT_EQ(zero / nonZero, BigInt(0));
+    EXPECT_EQ(zero % nonZero, BigInt(0));
+
+    // Division by one
+    BigInt a(12345);
+    EXPECT_EQ(a / BigInt(1), a);
+    EXPECT_EQ(a % BigInt(1), BigInt(0));
+
+    // Division by self
+    EXPECT_EQ(a / a, BigInt(1));
+    EXPECT_EQ(a % a, BigInt(0));
+
+    // Division where dividend < divisor
+    BigInt small(10);
+    BigInt large(100);
+    EXPECT_EQ(small / large, BigInt(0));
+    EXPECT_EQ(small % large, small);
+
+    // NOTE: Division by zero causes infinite loop - undefined behavior
+}
+
+TEST_F(BigIntArithmeticTest, SignedConversions) {
+    // Positive values
+    BigInt pos(12345);
+    EXPECT_EQ(static_cast<int64_t>(pos), 12345);
+    EXPECT_EQ(static_cast<int32_t>(pos), 12345);
+    EXPECT_EQ(static_cast<int16_t>(pos), 12345);
+
+    // Negative values
+    BigInt neg(-12345);
+    EXPECT_EQ(static_cast<int64_t>(neg), -12345);
+    EXPECT_EQ(static_cast<int32_t>(neg), -12345);
+    EXPECT_EQ(static_cast<int16_t>(neg), -12345);
+
+    // Zero
+    BigInt z(0);
+    EXPECT_EQ(static_cast<int64_t>(z), 0);
+    EXPECT_EQ(static_cast<int32_t>(z), 0);
+}
+
+TEST_F(BigIntArithmeticTest, NegativeOperations) {
+    // Test int32_t constructor with negative value
+    BigInt a(-100);  // Should be -100
+    EXPECT_TRUE(a.isNegative()) << "a should be negative";
+    EXPECT_EQ(static_cast<uint64_t>(a), 100) << "magnitude should be 100";
+    EXPECT_EQ(a.toStdString(10), "-100") << "string should be -100";
+
+    BigInt b(30);
+    EXPECT_TRUE(b.isPositive());
+    EXPECT_EQ(b.toStdString(10), "30");
+
+    // Test negative + positive: -100 + 30 = -70
+    BigInt sum = a + b;
+    EXPECT_EQ(sum.toStdString(10), "-70");
+
+    // Test negative - positive: -100 - 30 = -130
+    BigInt diff = a - b;
+    EXPECT_EQ(diff.toStdString(10), "-130");
+
+    // Test negative * positive: -100 * 30 = -3000
+    BigInt prod = a * b;
+    EXPECT_EQ(prod.toStdString(10), "-3000");
+
+    // Test negative * negative = positive
+    BigInt c(-30);
+    BigInt prod2 = a * c;
+    EXPECT_TRUE(prod2.isPositive());
+    EXPECT_EQ(prod2.toStdString(10), "3000");
+}
+
