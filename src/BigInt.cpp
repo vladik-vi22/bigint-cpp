@@ -398,7 +398,15 @@ BigInt BigInt::operator * (const uint32_t multiplier) const
 
 BigInt& BigInt::operator *= (const uint32_t multiplier)
 {
-    *this = *this * multiplier;
+    uint32_t carry = 0;
+    for (auto& digit : digits_) {
+        uint64_t product = static_cast<uint64_t>(digit) * multiplier + carry;
+        digit = static_cast<uint32_t>(product & UINT32_MAX);
+        carry = static_cast<uint32_t>(product >> 32);
+    }
+    if (carry) {
+        digits_.emplace_back(carry);
+    }
     return *this;
 }
 
