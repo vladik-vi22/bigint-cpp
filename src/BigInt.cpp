@@ -1233,6 +1233,11 @@ size_t BigInt::byteLength() const noexcept
     return len;
 }
 
+size_t BigInt::digitCount() const noexcept
+{
+    return digits_.size();
+}
+
 bool BigInt::isZero() const noexcept
 {
     return digits_.empty() || (digits_.size() == 1 && digits_[0] == 0);

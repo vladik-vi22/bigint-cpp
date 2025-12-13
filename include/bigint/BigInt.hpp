@@ -210,6 +210,7 @@ class BigInt {
   /// @{
   [[nodiscard]] size_t bitLength() const noexcept;   ///< Number of bits (minimum 1 for zero)
   [[nodiscard]] size_t byteLength() const noexcept;  ///< Number of bytes needed
+  [[nodiscard]] size_t digitCount() const noexcept;  ///< Number of 32-bit digits
   [[nodiscard]] bool isZero() const noexcept;        ///< True if value is zero
   [[nodiscard]] bool isEven() const noexcept;        ///< True if value is even
   [[nodiscard]] bool isOdd() const noexcept;         ///< True if value is odd
