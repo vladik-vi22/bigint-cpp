@@ -1215,12 +1215,12 @@ bool BigInt::isZero() const noexcept
 
 bool BigInt::isEven() const noexcept
 {
-    return !(digits_.front() & 1);
+    return digits_.empty() || !(digits_.front() & 1);
 }
 
 bool BigInt::isOdd() const noexcept
 {
-    return digits_.front() & 1;
+    return !digits_.empty() && (digits_.front() & 1);
 }
 
 bool BigInt::isPositive() const noexcept
