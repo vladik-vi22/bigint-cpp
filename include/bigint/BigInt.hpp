@@ -257,3 +257,24 @@ struct hash<bigint::BigInt> {
 };
 
 }  // namespace std
+
+namespace bigint::literals {
+
+/// @brief User-defined literal for BigInt.
+/// @param str The string representation of the number.
+/// @param len Length of the string.
+/// @return BigInt constructed from the decimal string.
+/// @example auto x = 123456789012345678901234567890_bigint;
+inline BigInt operator""_bigint(const char* str, size_t len) {
+  return BigInt(std::string(str, len), 10);
+}
+
+/// @brief User-defined literal for BigInt (integer form).
+/// @param value The integer value.
+/// @return BigInt constructed from the integer.
+/// @example auto x = 12345_bigint;
+inline BigInt operator""_bigint(unsigned long long value) {
+  return BigInt(static_cast<uint64_t>(value));
+}
+
+}  // namespace bigint::literals
