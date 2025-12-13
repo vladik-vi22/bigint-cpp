@@ -1064,6 +1064,34 @@ void swap(BigInt& lhs, BigInt& rhs) noexcept
 // Number Theory
 // ============================================================================
 
+namespace {
+
+// Miller-Rabin witness test helper
+bool millerRabinWitness(const BigInt& a, const BigInt& d, size_t s, const BigInt& n) {
+    const BigInt n_minus_1 = n - BigInt(1);
+
+    // Compute x = a^d mod n
+    BigInt x = powmod(a, d, n);
+
+    if (x == BigInt(1) || x == n_minus_1) {
+        return true;  // Passes for this witness
+    }
+
+    for (size_t r = 1; r < s; ++r) {
+        x = powmod(x, BigInt(2), n);
+        if (x == n_minus_1) {
+            return true;  // Passes
+        }
+        if (x == BigInt(1)) {
+            return false;  // Composite
+        }
+    }
+
+    return false;  // Composite
+}
+
+}  // anonymous namespace
+
 bool BigInt::isProbablePrime(size_t rounds) const
 {
     // Handle small cases
@@ -1073,6 +1101,14 @@ bool BigInt::isProbablePrime(size_t rounds) const
     if (isEven()) return false;
     if (*this < BigInt(2)) return false;
 
+    // Small primes for quick divisibility check
+    static const uint32_t smallPrimes[] = {3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47};
+    for (uint32_t p : smallPrimes) {
+        if (*this == BigInt(p)) return true;
+        BigInt remainder = *this % BigInt(p);
+        if (remainder.isZero()) return false;
+    }
+
     // Write n-1 as 2^s * d where d is odd
     BigInt d = *this - BigInt(1);
     size_t s = 0;
@@ -1081,45 +1117,42 @@ bool BigInt::isProbablePrime(size_t rounds) const
         ++s;
     }
 
-    // Miller-Rabin test
-    const BigInt n_minus_1 = *this - BigInt(1);
-    const BigInt n_minus_2 = *this - BigInt(2);
+    // Use deterministic witnesses for small numbers
+    // For n < 2047, witness {2} is sufficient
+    if (*this < BigInt(2047)) {
+        return millerRabinWitness(BigInt(2), d, s, *this);
+    }
+    // For n < 1373653, witnesses {2, 3} are sufficient
+    if (*this < BigInt(1373653)) {
+        return millerRabinWitness(BigInt(2), d, s, *this) &&
+               millerRabinWitness(BigInt(3), d, s, *this);
+    }
+    // For n < 25326001, witnesses {2, 3, 5} are sufficient
+    if (*this < BigInt(25326001)) {
+        return millerRabinWitness(BigInt(2), d, s, *this) &&
+               millerRabinWitness(BigInt(3), d, s, *this) &&
+               millerRabinWitness(BigInt(5), d, s, *this);
+    }
+    // For n < 3215031751, witnesses {2, 3, 5, 7} are sufficient
+    if (*this < BigInt(3215031751ULL)) {
+        return millerRabinWitness(BigInt(2), d, s, *this) &&
+               millerRabinWitness(BigInt(3), d, s, *this) &&
+               millerRabinWitness(BigInt(5), d, s, *this) &&
+               millerRabinWitness(BigInt(7), d, s, *this);
+    }
 
+    // For larger numbers, use random witnesses (probabilistic)
+    const BigInt n_minus_3 = *this - BigInt(3);
     for (size_t i = 0; i < rounds; ++i) {
         // Pick random witness a in [2, n-2]
-        BigInt a = BigInt::randomBelow(n_minus_2);
-        if (a < BigInt(2)) a = BigInt(2);
+        BigInt a = BigInt::randomBelow(n_minus_3) + BigInt(2);
 
-        // Check gcd(a, n) == 1
-        if (gcd(a, *this) != BigInt(1)) {
-            return false;  // Found a factor
-        }
-
-        // Compute x = a^d mod n
-        BigInt x = powmod(a, d, *this);
-
-        if (x == BigInt(1) || x == n_minus_1) {
-            continue;  // Probably prime for this witness
-        }
-
-        bool composite = true;
-        for (size_t r = 1; r < s; ++r) {
-            x = powmod(x, BigInt(2), *this);
-            if (x == n_minus_1) {
-                composite = false;
-                break;
-            }
-            if (x == BigInt(1)) {
-                return false;  // Definitely composite
-            }
-        }
-
-        if (composite) {
-            return false;  // Definitely composite
+        if (!millerRabinWitness(a, d, s, *this)) {
+            return false;
         }
     }
 
-    return true;  // Probably prime
+    return true;
 }
 
 BigInt BigInt::randomBits(size_t numBits)

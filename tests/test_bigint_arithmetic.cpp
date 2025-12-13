@@ -306,3 +306,140 @@ TEST_F(BigIntArithmeticTest, SymbolJacobi) {
     EXPECT_EQ(symbolJacobi(g, h), 0);
 }
 
+TEST_F(BigIntArithmeticTest, Sqrt) {
+    // sqrt(0) = 0
+    EXPECT_EQ(sqrt(BigInt(0)), BigInt(0));
+
+    // sqrt(1) = 1
+    EXPECT_EQ(sqrt(BigInt(1)), BigInt(1));
+
+    // sqrt(4) = 2
+    EXPECT_EQ(sqrt(BigInt(4)), BigInt(2));
+
+    // sqrt(9) = 3
+    EXPECT_EQ(sqrt(BigInt(9)), BigInt(3));
+
+    // sqrt(10) = 3 (floor)
+    EXPECT_EQ(sqrt(BigInt(10)), BigInt(3));
+
+    // sqrt(100) = 10
+    EXPECT_EQ(sqrt(BigInt(100)), BigInt(10));
+
+    // sqrt(1000000) = 1000
+    EXPECT_EQ(sqrt(BigInt(1000000)), BigInt(1000));
+
+    // Large number: sqrt(2^64) = 2^32
+    BigInt large = BigInt(1) << 64;
+    BigInt expected = BigInt(1) << 32;
+    EXPECT_EQ(sqrt(large), expected);
+
+    // Verify: result^2 <= n < (result+1)^2
+    BigInt n("123456789012345678901234567890", 10);
+    BigInt s = sqrt(n);
+    EXPECT_LE(s * s, n);
+    EXPECT_GT((s + BigInt(1)) * (s + BigInt(1)), n);
+}
+
+TEST_F(BigIntArithmeticTest, IsProbablePrimeSmall) {
+    // Known small primes
+    EXPECT_TRUE(BigInt(2).isProbablePrime());
+    EXPECT_TRUE(BigInt(3).isProbablePrime());
+    EXPECT_TRUE(BigInt(5).isProbablePrime());
+    EXPECT_TRUE(BigInt(7).isProbablePrime());
+    EXPECT_TRUE(BigInt(11).isProbablePrime());
+    EXPECT_TRUE(BigInt(13).isProbablePrime());
+    EXPECT_TRUE(BigInt(17).isProbablePrime());
+    EXPECT_TRUE(BigInt(19).isProbablePrime());
+    EXPECT_TRUE(BigInt(23).isProbablePrime());
+    EXPECT_TRUE(BigInt(97).isProbablePrime());
+
+    // Known small composites
+    EXPECT_FALSE(BigInt(0).isProbablePrime());
+    EXPECT_FALSE(BigInt(1).isProbablePrime());
+    EXPECT_FALSE(BigInt(4).isProbablePrime());
+    EXPECT_FALSE(BigInt(6).isProbablePrime());
+    EXPECT_FALSE(BigInt(8).isProbablePrime());
+    EXPECT_FALSE(BigInt(9).isProbablePrime());
+    EXPECT_FALSE(BigInt(10).isProbablePrime());
+    EXPECT_FALSE(BigInt(15).isProbablePrime());
+    EXPECT_FALSE(BigInt(100).isProbablePrime());
+
+    // Negative numbers are not prime
+    EXPECT_FALSE(BigInt("-7").isProbablePrime());
+}
+
+TEST_F(BigIntArithmeticTest, IsProbablePrimeLarge) {
+    // Mersenne primes: 2^p - 1 where p is prime
+    // 2^13 - 1 = 8191
+    BigInt mersenne13 = (BigInt(1) << 13) - BigInt(1);
+    EXPECT_TRUE(mersenne13.isProbablePrime());
+
+    // 2^17 - 1 = 131071
+    BigInt mersenne17 = (BigInt(1) << 17) - BigInt(1);
+    EXPECT_TRUE(mersenne17.isProbablePrime());
+
+    // 2^31 - 1 = 2147483647
+    BigInt mersenne31 = (BigInt(1) << 31) - BigInt(1);
+    EXPECT_TRUE(mersenne31.isProbablePrime());
+
+    // 2^61 - 1 = 2305843009213693951
+    BigInt mersenne61 = (BigInt(1) << 61) - BigInt(1);
+    EXPECT_TRUE(mersenne61.isProbablePrime());
+
+    // Product of two primes is composite
+    BigInt p1("104729", 10);
+    BigInt p2("104743", 10);
+    BigInt composite = p1 * p2;
+    EXPECT_FALSE(composite.isProbablePrime());
+}
+
+TEST_F(BigIntArithmeticTest, RandomBits) {
+    // Test that randomBits generates numbers with correct bit length
+    for (size_t bits : {32, 64, 128, 256}) {
+        BigInt r = BigInt::randomBits(bits);
+        EXPECT_EQ(r.bitLength(), bits);
+        EXPECT_TRUE(r.isPositive());
+    }
+
+    // Edge case: 1 bit
+    BigInt r1 = BigInt::randomBits(1);
+    EXPECT_EQ(r1.bitLength(), 1);
+    EXPECT_EQ(r1, BigInt(1));
+
+    // Edge case: 0 bits
+    BigInt r0 = BigInt::randomBits(0);
+    EXPECT_TRUE(r0.isZero());
+}
+
+TEST_F(BigIntArithmeticTest, RandomBelow) {
+    BigInt max("1000000", 10);
+
+    // Generate several random numbers and verify they're in range
+    for (int i = 0; i < 10; ++i) {
+        BigInt r = BigInt::randomBelow(max);
+        EXPECT_GE(r, BigInt(0));
+        EXPECT_LT(r, max);
+    }
+
+    // Edge cases
+    EXPECT_TRUE(BigInt::randomBelow(BigInt(1)).isZero());
+    EXPECT_TRUE(BigInt::randomBelow(BigInt(0)).isZero());
+}
+
+TEST_F(BigIntArithmeticTest, DigitCount) {
+    // Zero has 0 digits (empty vector)
+    EXPECT_EQ(BigInt().digitCount(), 0);
+
+    // Small numbers
+    EXPECT_EQ(BigInt(1).digitCount(), 1);
+    EXPECT_EQ(BigInt(UINT32_MAX).digitCount(), 1);
+
+    // Numbers requiring 2 digits
+    BigInt twoDigits = BigInt(1) << 32;
+    EXPECT_EQ(twoDigits.digitCount(), 2);
+
+    // Large number
+    BigInt large = BigInt(1) << 256;
+    EXPECT_EQ(large.digitCount(), 9);  // 257 bits = 9 x 32-bit words
+}
+

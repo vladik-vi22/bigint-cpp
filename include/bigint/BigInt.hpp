@@ -182,9 +182,11 @@ class BigInt {
   /// @name Number Theory
   /// @{
 
-  /// @brief Test if value is probably prime using Miller-Rabin.
-  /// @param rounds Number of test rounds (default 16, higher = more accurate).
-  /// @return true if probably prime, false if definitely composite.
+  /// @brief Test if value is prime using Miller-Rabin.
+  /// @details For numbers < 3,215,031,751, uses deterministic witnesses (100% accurate).
+  ///          For larger numbers, uses probabilistic test with specified rounds.
+  /// @param rounds Number of test rounds for large numbers (default 16).
+  /// @return true if prime (or probably prime for large numbers), false if composite.
   [[nodiscard]] bool isProbablePrime(size_t rounds = 16) const;
 
   /// @brief Generate a random BigInt with specified number of bits.
