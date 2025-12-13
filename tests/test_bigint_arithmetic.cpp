@@ -555,3 +555,91 @@ TEST_F(BigIntArithmeticTest, NegativeOperations) {
     EXPECT_EQ(prod2.toStdString(10), "3000");
 }
 
+TEST_F(BigIntArithmeticTest, EdgeCaseOverflow) {
+    // Test around 32-bit boundary
+    BigInt maxU32(UINT32_MAX);
+    BigInt one(1);
+    BigInt overflow = maxU32 + one;
+    EXPECT_EQ(overflow.toStdString(10), "4294967296");
+
+    // Test around 64-bit boundary
+    BigInt maxU64(UINT64_MAX);
+    BigInt overflow64 = maxU64 + one;
+    EXPECT_EQ(overflow64.toStdString(10), "18446744073709551616");
+
+    // Multiplication overflow
+    BigInt large(UINT32_MAX);
+    BigInt product = large * large;
+    EXPECT_EQ(product.toStdString(10), "18446744065119617025");
+}
+
+TEST_F(BigIntArithmeticTest, EdgeCaseZeroOperations) {
+    BigInt zero(0);
+    BigInt num(12345);
+
+    // Zero arithmetic
+    EXPECT_EQ(zero + num, num);
+    EXPECT_EQ(num + zero, num);
+    EXPECT_EQ(zero - num, -num);
+    EXPECT_EQ(num - zero, num);
+    EXPECT_EQ(zero * num, zero);
+    EXPECT_EQ(num * zero, zero);
+
+    // Zero comparisons
+    EXPECT_TRUE(zero == BigInt(0));
+    EXPECT_TRUE(zero <= num);
+    EXPECT_TRUE(zero < num);
+    EXPECT_FALSE(zero > num);
+
+    // Zero shifts
+    EXPECT_EQ(zero << 100, zero);
+    EXPECT_EQ(zero >> 100, zero);
+}
+
+TEST_F(BigIntArithmeticTest, EdgeCasePowerOperations) {
+    // Power of zero
+    EXPECT_EQ(pow(BigInt(0), BigInt(5)), BigInt(0));
+    EXPECT_EQ(pow(BigInt(5), BigInt(0)), BigInt(1));
+
+    // Power of one
+    EXPECT_EQ(pow(BigInt(1), BigInt(1000)), BigInt(1));
+    EXPECT_EQ(pow(BigInt(1000), BigInt(1)), BigInt(1000));
+
+    // Negative exponent returns zero
+    EXPECT_EQ(pow(BigInt(2), BigInt(-1)), BigInt(0));
+}
+
+TEST_F(BigIntArithmeticTest, EdgeCaseGcdLcm) {
+    // GCD with zero
+    EXPECT_EQ(gcd(BigInt(0), BigInt(5)), BigInt(5));
+    EXPECT_EQ(gcd(BigInt(5), BigInt(0)), BigInt(5));
+
+    // GCD with one
+    EXPECT_EQ(gcd(BigInt(1), BigInt(12345)), BigInt(1));
+
+    // LCM with one
+    EXPECT_EQ(lcm(BigInt(1), BigInt(12345)), BigInt(12345));
+
+    // GCD of same number
+    EXPECT_EQ(gcd(BigInt(100), BigInt(100)), BigInt(100));
+}
+
+TEST_F(BigIntArithmeticTest, EdgeCaseIncrementDecrement) {
+    // Increment from -1 to 0
+    BigInt neg1(-1);
+    ++neg1;
+    EXPECT_EQ(neg1, BigInt(0));
+    EXPECT_TRUE(neg1.isZero());
+
+    // Decrement from 0 to -1
+    BigInt zero(0);
+    --zero;
+    EXPECT_EQ(zero, BigInt(-1));
+    EXPECT_TRUE(zero.isNegative());
+
+    // Increment across 32-bit boundary
+    BigInt boundary(UINT32_MAX);
+    ++boundary;
+    EXPECT_EQ(boundary.toStdString(10), "4294967296");
+}
+
