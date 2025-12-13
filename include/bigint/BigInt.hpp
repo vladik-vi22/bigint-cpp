@@ -171,6 +171,7 @@ class BigInt {
   /// @name Utility Functions
   /// @{
   friend BigInt abs(const BigInt& value);               ///< Absolute value
+  friend BigInt sqrt(const BigInt& value);              ///< Integer square root (floor)
   friend BigInt gcd(BigInt a, BigInt b);                ///< Greatest common divisor
   friend BigInt lcm(const BigInt& a, const BigInt& b);  ///< Least common multiple
   friend const BigInt& max(const BigInt& a, const BigInt& b) noexcept;  ///< Maximum

@@ -969,6 +969,37 @@ BigInt abs(const BigInt& bigInt)
     return absolute;
 }
 
+BigInt sqrt(const BigInt& value)
+{
+    // Handle special cases
+    if (value.isZero()) return BigInt();
+    if (!value.positive_) {
+        // sqrt of negative is undefined; return 0
+        return BigInt();
+    }
+    if (value == BigInt(1)) return BigInt(1);
+
+    // Newton's method (Heron's method) for integer square root
+    // Initial guess: 2^((bitLength+1)/2) which is close to sqrt(value)
+    size_t bits = value.bitLength();
+    BigInt x = BigInt(1) << ((bits + 1) / 2);
+
+    // Iterate until convergence
+    BigInt x_prev;
+    while (true) {
+        // x_new = (x + value/x) / 2
+        BigInt x_new = (x + value / x) >> 1;
+
+        // Newton's method for integer sqrt converges when x_new >= x
+        if (x_new >= x) {
+            break;
+        }
+        x = x_new;
+    }
+
+    return x;
+}
+
 BigInt gcd(BigInt bigInt1, BigInt bigInt2)
 {
     if(!bigInt1)
