@@ -76,12 +76,25 @@ BigInt::BigInt(BigInt&& other) noexcept
 }
 
 BigInt::BigInt(std::string str, const uint8_t base) {
+  // Handle empty string - treat as zero
+  if (str.empty()) {
+    positive_ = true;
+    digits_.push_back(0);
+    return;
+  }
+
   const uint8_t cell_size = base == kBaseHexadecimal
                                 ? (sizeof(uint32_t) * 2)
                                 : (sizeof(uint32_t) * 8);
-  if (!str.empty() && str[0] == '-') {
+  if (str[0] == '-') {
     positive_ = false;
     str.erase(0, 1);
+    // Handle "-" alone as zero
+    if (str.empty()) {
+      positive_ = true;
+      digits_.push_back(0);
+      return;
+    }
   } else {
     positive_ = true;
   }
@@ -577,7 +590,7 @@ BigInt inversemod(BigInt dividend, const BigInt& divisor)
     return x1;
 }
 
-bool congruencemod(const BigInt& dividend1, const BigInt& dividend2, const BigInt divisor)
+bool congruencemod(const BigInt& dividend1, const BigInt& dividend2, const BigInt& divisor)
 {
     BigInt remainder1(dividend1 % divisor);
     BigInt remainder2(dividend2 % divisor);
@@ -611,7 +624,7 @@ int8_t symbolJacobi(BigInt bigInt1, BigInt bigInt2)
     {
         return 0;
     }
-    int8_t symbolJacobi = 1;
+    int8_t result = 1;
     size_t iterator = 0;
     BigInt bigInt3;
     if(!bigInt1.positive_)
@@ -619,7 +632,7 @@ int8_t symbolJacobi(BigInt bigInt1, BigInt bigInt2)
         bigInt1.positive_ = true;
         if(bigInt2 % BigInt(4) == BigInt(3))
         {
-            symbolJacobi = -symbolJacobi;
+            result = -result;
         }
     }
     while(bigInt1)
@@ -634,18 +647,18 @@ int8_t symbolJacobi(BigInt bigInt1, BigInt bigInt2)
         {
             if(bigInt2 % BigInt(8) == BigInt(3) || bigInt2 % BigInt(8) == BigInt(5))
             {
-                symbolJacobi = -symbolJacobi;
+                result = -result;
             }
         }
         if(bigInt1 % BigInt(4) == BigInt(3) && bigInt2 % BigInt(4) == BigInt(3))
         {
-            symbolJacobi = -symbolJacobi;
+            result = -result;
         }
         bigInt3 = bigInt1;
         bigInt1 = bigInt2 % bigInt3;
         bigInt2 = bigInt3;
     }
-    return symbolJacobi;
+    return result;
 }
 
 BigInt BigInt::operator ~() const
@@ -891,16 +904,14 @@ BigInt BigInt::rightCircularShift(const size_t shift) const
 
 bool BigInt::operator !() const noexcept
 {
+    for(const auto& digit : digits_)
     {
-        for(std::vector<uint32_t>::const_iterator iteratordigits_ = digits_.cbegin(); iteratordigits_ != digits_.cend(); ++iteratordigits_)
+        if(digit != 0)
         {
-            if(*iteratordigits_ != 0)
-            {
-                return false;
-            }
+            return false;
         }
-        return true;
     }
+    return true;
 }
 
 bool BigInt::operator && (const BigInt& rightAND) const noexcept
@@ -1210,7 +1221,13 @@ BigInt BigInt::randomBelow(const BigInt& max)
 BigInt BigInt::randomPrime(size_t numBits)
 {
     if (numBits < 2) return BigInt(2);
-    if (numBits == 2) return BigInt(rand() % 2 ? 2 : 3);
+    if (numBits == 2) {
+        // Use proper RNG instead of rand()
+        static std::random_device rd;
+        static std::mt19937 gen(rd());
+        static std::uniform_int_distribution<int> dist(0, 1);
+        return BigInt(dist(gen) ? 2 : 3);
+    }
 
     while (true) {
         // Generate random odd number with exactly numBits bits
@@ -1253,7 +1270,16 @@ BigInt BigInt::nextPrime() const
         candidate += BigInt(1);
     }
 
-    while (true) {
+    // By Bertrand's postulate, there's always a prime between n and 2n.
+    // We use a generous iteration limit based on the prime gap estimate.
+    // For n-bit numbers, expected gap is O(n), so we allow O(n^2) iterations.
+    const size_t bits = candidate.bitLength();
+    const size_t maxIterations = std::max(static_cast<size_t>(1000000), bits * bits * 100);
+    size_t iterations = 0;
+
+    while (iterations < maxIterations) {
+        ++iterations;
+
         // Quick rejection by small primes
         bool divisible = false;
         for (uint32_t p : kSmallPrimes) {
@@ -1272,6 +1298,8 @@ BigInt BigInt::nextPrime() const
 
         candidate += BigInt(2);  // Next odd number
     }
+
+    throw std::runtime_error("nextPrime: exceeded maximum iterations");
 }
 
 std::ostream& operator<<(std::ostream& out, const BigInt& value) {
@@ -1514,6 +1542,11 @@ void BigInt::deleteZeroHighOrderDigit()
     while(digits_.size() > 1 && !digits_.back())
     {
         digits_.pop_back();
+    }
+    // Ensure we always have at least one digit (normalized zero representation)
+    if(digits_.empty())
+    {
+        digits_.push_back(0);
     }
 }
 

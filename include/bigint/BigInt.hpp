@@ -124,7 +124,7 @@ class BigInt {
 
   /// @brief Check if dividend1 = dividend2 (mod divisor).
   friend bool congruencemod(const BigInt& dividend1, const BigInt& dividend2,
-                            BigInt divisor);
+                            const BigInt& divisor);
 
   /// @brief Check if two numbers are coprime (gcd == 1).
   friend bool isCoprime(const BigInt& a, const BigInt& b);
@@ -251,6 +251,11 @@ class BigInt {
   [[nodiscard]] bool isOdd() const noexcept;         ///< True if value is odd
   [[nodiscard]] bool isPositive() const noexcept;    ///< True if value >= 0
   [[nodiscard]] bool isNegative() const noexcept;    ///< True if value < 0
+
+  /// @brief Get const reference to internal digits (little-endian order).
+  /// @return Const reference to the internal digit vector.
+  /// @note This is provided for efficient hashing and serialization without allocation.
+  [[nodiscard]] const std::vector<uint32_t>& digits() const noexcept { return digits_; }
   /// @}
 
  private:
@@ -285,8 +290,8 @@ struct hash<bigint::BigInt> {
     size_t h = 14695981039346656037ULL;  // FNV offset basis
     h ^= static_cast<size_t>(value.isNegative());
     h *= 1099511628211ULL;  // FNV prime
-    auto digits = value.toStdVectorUint32_t();
-    for (uint32_t digit : digits) {
+    // Use digits() to avoid allocation (previously used toStdVectorUint32_t())
+    for (uint32_t digit : value.digits()) {
       h ^= static_cast<size_t>(digit);
       h *= 1099511628211ULL;
     }
