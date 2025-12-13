@@ -61,18 +61,7 @@ std::string DecimalToBinaryString(std::string decimal_str) {
 
 }  // anonymous namespace
 
-// Define external constants
-namespace constants {
 
-const BigInt kZero(static_cast<uint32_t>(0));
-const BigInt kOne(static_cast<uint32_t>(1));
-const BigInt kTwo(static_cast<uint32_t>(2));
-const BigInt kThree(static_cast<uint32_t>(3));
-const BigInt kFour(static_cast<uint32_t>(4));
-const BigInt kFive(static_cast<uint32_t>(5));
-const BigInt kEight(static_cast<uint32_t>(8));
-
-}  // namespace constants
 
 BigInt::BigInt() : positive_(true), digits_() {
 }
@@ -284,7 +273,7 @@ BigInt& BigInt::operator += (const BigInt& augend)
 
 BigInt& BigInt::operator ++()
 {
-    *this += constants::kOne;
+    *this += BigInt(1);
     return *this;
 }
 
@@ -376,7 +365,7 @@ BigInt& BigInt::operator -= (const BigInt& subtrahend)
 
 BigInt& BigInt::operator -- ()
 {
-    *this -= constants::kOne;
+    *this -= BigInt(1);
     return *this;
 }
 
@@ -450,7 +439,7 @@ std::pair<BigInt, BigInt> BigInt::DivMod(const BigInt& divisor) const
             --differenceRemainderNDivisorbitLength;
         }
         remainder -= borrow;
-        fraction += constants::kOne << differenceRemainderNDivisorbitLength; // 1 << n = 2 ^ n
+        fraction += BigInt(1) << differenceRemainderNDivisorbitLength;  // 1 << n = 2^n
     }
     fraction.positive_ = positive_ == divisor.positive_;
     remainder.positive_ = positive_;
@@ -490,7 +479,7 @@ BigInt pow(const BigInt& base, const BigInt& exponent)
 {
     if(!exponent.positive_)
     {
-        return constants::kZero;
+        return BigInt(0);
     }
     BigInt power(1);
     power.digits_.reserve(base.digits_.size() * static_cast<size_t>(exponent));
@@ -556,14 +545,14 @@ BigInt inversemod(BigInt dividend, const BigInt& divisor)
 {
     if(!divisor || !isCoprime(dividend, divisor))
     {
-        return constants::kZero;
+        return BigInt(0);
     }
     BigInt divisor_copy(divisor);
     BigInt fraction;
     BigInt x0(0);
     BigInt x1(1);
     BigInt x_temp;
-    while(dividend > constants::kOne)
+    while(dividend > BigInt(1))
     {
         fraction = dividend / divisor_copy;
         x_temp = divisor_copy;
@@ -605,7 +594,7 @@ bool congruencemod(const BigInt& dividend1, const BigInt& dividend2, const BigIn
 
 bool isCoprime(const BigInt& bigInt1, const BigInt& bigInt2)
 {
-    return gcd(bigInt1, bigInt2) == constants::kOne;
+    return gcd(bigInt1, bigInt2) == BigInt(1);
 }
 
 int8_t symbolJacobi(BigInt bigInt1, BigInt bigInt2)
@@ -620,7 +609,7 @@ int8_t symbolJacobi(BigInt bigInt1, BigInt bigInt2)
     if(!bigInt1.positive_)
     {
         bigInt1.positive_ = true;
-        if(bigInt2 % constants::kFour == constants::kThree)
+        if(bigInt2 % BigInt(4) == BigInt(3))
         {
             symbolJacobi = -symbolJacobi;
         }
@@ -635,12 +624,12 @@ int8_t symbolJacobi(BigInt bigInt1, BigInt bigInt2)
         }
         if(iterator % 2)
         {
-            if(bigInt2 % constants::kEight == constants::kThree || bigInt2 % constants::kEight == constants::kFive)
+            if(bigInt2 % BigInt(8) == BigInt(3) || bigInt2 % BigInt(8) == BigInt(5))
             {
                 symbolJacobi = -symbolJacobi;
             }
         }
-        if(bigInt1 % constants::kFour == constants::kThree && bigInt2 % constants::kFour == constants::kThree)
+        if(bigInt1 % BigInt(4) == BigInt(3) && bigInt2 % BigInt(4) == BigInt(3))
         {
             symbolJacobi = -symbolJacobi;
         }
@@ -653,7 +642,7 @@ int8_t symbolJacobi(BigInt bigInt1, BigInt bigInt2)
 
 BigInt BigInt::operator ~() const
 {
-    return -*this - constants::kOne;
+    return -*this - BigInt(1);
 }
 
 BigInt BigInt::operator & (const BigInt& rightBitwiseAND) const
@@ -675,15 +664,15 @@ BigInt BigInt::operator & (const BigInt& rightBitwiseAND) const
     }
     else if(!positive_ && !rightBitwiseAND.positive_)
     {
-        return -(~*this | ~rightBitwiseAND) - constants::kOne;
+        return -(~*this | ~rightBitwiseAND) - BigInt(1);
     }
     else if(positive_ && !rightBitwiseAND.positive_)
     {
-        return (*this | ~rightBitwiseAND) + rightBitwiseAND + constants::kOne;
+        return (*this | ~rightBitwiseAND) + rightBitwiseAND + BigInt(1);
     }
     else // !positive_ && rightBitwiseAnd.positive_
     {
-        return (~*this | rightBitwiseAND) + *this + constants::kOne;
+        return (~*this | rightBitwiseAND) + *this + BigInt(1);
     }
 }
 
@@ -720,7 +709,7 @@ BigInt BigInt::operator | (const BigInt& rightBitwiseOR) const
     }
     else if(!positive_ && !rightBitwiseOR.positive_)
     {
-        return -(~*this & ~rightBitwiseOR) - constants::kOne;
+        return -(~*this & ~rightBitwiseOR) - BigInt(1);
     }
     else if(positive_ && !rightBitwiseOR.positive_)
     {
@@ -882,13 +871,13 @@ BigInt& BigInt::operator >>= (const size_t shift)
 
 BigInt BigInt::leftCircularShift(const size_t shift) const
 {
-    const BigInt mask(--(constants::kOne << bitLength()));
+    const BigInt mask(--(BigInt(1) << bitLength()));
     return (((*this << shift) | (*this >> (bitLength() - shift))) & mask);
 }
 
 BigInt BigInt::rightCircularShift(const size_t shift) const
 {
-    const BigInt mask(--(constants::kOne << bitLength()));
+    const BigInt mask(--(BigInt(1) << bitLength()));
     return (((*this >> shift) | (*this << (bitLength() - shift))) & mask);
 }
 

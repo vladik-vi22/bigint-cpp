@@ -167,7 +167,7 @@ TEST_F(BigIntArithmeticTest, HugePowerMod) {
     BigInt result = powmod(base, exp, mod);
     // Result should be less than modulus
     EXPECT_TRUE(result < mod);
-    EXPECT_TRUE(result >= constants::kZero);
+    EXPECT_TRUE(result >= BigInt(0));
 }
 
 TEST_F(BigIntArithmeticTest, HugeGCD) {
@@ -244,7 +244,7 @@ TEST_F(BigIntArithmeticTest, IsCoprime) {
 
     // Any number and 1 are coprime
     BigInt large("123456789012345678901234567890", 10);
-    EXPECT_TRUE(isCoprime(large, constants::kOne));
+    EXPECT_TRUE(isCoprime(large, BigInt(1)));
 }
 
 TEST_F(BigIntArithmeticTest, InverseMod) {
