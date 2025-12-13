@@ -765,7 +765,8 @@ BigInt& BigInt::operator ^= (const BigInt& rightBitwiseXOR)
 
 BigInt BigInt::operator << (const size_t shift) const
 {
-    if(!shift)
+    // Handle zero shift or zero value early
+    if(!shift || digits_.empty() || !(*this))
     {
         return *this;
     }
@@ -808,7 +809,8 @@ BigInt& BigInt::operator <<= (const size_t shift)
 
 BigInt BigInt::operator >> (const size_t shift) const
 {
-    if(!shift)
+    // Handle zero shift or zero value early
+    if(!shift || digits_.empty() || !(*this))
     {
         return *this;
     }
@@ -1246,7 +1248,7 @@ void BigInt::alignTo(BigInt& aligned)
 
 void BigInt::deleteZeroHighOrderDigit()
 {
-    while(!digits_.back() && digits_.size() > 1)
+    while(digits_.size() > 1 && !digits_.back())
     {
         digits_.pop_back();
     }

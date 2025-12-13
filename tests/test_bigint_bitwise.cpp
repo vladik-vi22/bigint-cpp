@@ -52,12 +52,11 @@ TEST_F(BigIntBitwiseTest, ShiftByZero) {
     EXPECT_EQ((num >> static_cast<size_t>(0)).toStdString(10), "12345");
 }
 
-// Note: Shifting zero causes a crash in the library - skipping this test
-// TEST_F(BigIntBitwiseTest, ShiftZero) {
-//     BigInt zero;
-//     EXPECT_TRUE((zero << static_cast<size_t>(10)).isZero());
-//     EXPECT_TRUE((zero >> static_cast<size_t>(10)).isZero());
-// }
+TEST_F(BigIntBitwiseTest, ShiftZero) {
+    BigInt zero;
+    EXPECT_TRUE((zero << static_cast<size_t>(10)).isZero());
+    EXPECT_TRUE((zero >> static_cast<size_t>(10)).isZero());
+}
 
 TEST_F(BigIntBitwiseTest, RightShiftToZero) {
     BigInt num("255", 10);
