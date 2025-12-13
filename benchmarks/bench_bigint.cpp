@@ -364,3 +364,60 @@ static void BM_BigInt_Modulo_Huge(benchmark::State& state) {
 }
 BENCHMARK(BM_BigInt_Modulo_Huge);
 
+// ============================================================================
+// Prime Generation and Testing Benchmarks
+// ============================================================================
+
+static void BM_BigInt_IsProbablePrime_Small(benchmark::State& state) {
+    BigInt prime("104729");  // Known prime
+    for (auto _ : state) {
+        bool result = prime.isProbablePrime();
+        benchmark::DoNotOptimize(result);
+    }
+}
+BENCHMARK(BM_BigInt_IsProbablePrime_Small);
+
+static void BM_BigInt_IsProbablePrime_32bit(benchmark::State& state) {
+    BigInt prime("2147483647");  // Mersenne prime M31
+    for (auto _ : state) {
+        bool result = prime.isProbablePrime();
+        benchmark::DoNotOptimize(result);
+    }
+}
+BENCHMARK(BM_BigInt_IsProbablePrime_32bit);
+
+static void BM_BigInt_RandomPrime_16bit(benchmark::State& state) {
+    for (auto _ : state) {
+        BigInt prime = BigInt::randomPrime(16);
+        benchmark::DoNotOptimize(prime);
+    }
+}
+BENCHMARK(BM_BigInt_RandomPrime_16bit);
+
+static void BM_BigInt_NextPrime_Small(benchmark::State& state) {
+    BigInt start("10000");
+    for (auto _ : state) {
+        BigInt prime = start.nextPrime();
+        benchmark::DoNotOptimize(prime);
+    }
+}
+BENCHMARK(BM_BigInt_NextPrime_Small);
+
+static void BM_BigInt_Sqrt_Large(benchmark::State& state) {
+    BigInt n("123456789012345678901234567890123456789012345678901234567890");
+    for (auto _ : state) {
+        BigInt result = sqrt(n);
+        benchmark::DoNotOptimize(result);
+    }
+}
+BENCHMARK(BM_BigInt_Sqrt_Large);
+
+static void BM_BigInt_RandomBits_256(benchmark::State& state) {
+    for (auto _ : state) {
+        BigInt r = BigInt::randomBits(256);
+        benchmark::DoNotOptimize(r);
+    }
+}
+BENCHMARK(BM_BigInt_RandomBits_256);
+
+BENCHMARK_MAIN();
