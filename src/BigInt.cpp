@@ -18,6 +18,7 @@ namespace {
 constexpr uint64_t kBasisCalcSys = 1ULL << 32;  // 2^32 for carry calculations
 constexpr uint32_t kBasisCalcDec = 1000000000;  // 10^9 for decimal conversion
 constexpr uint8_t kDecimalCellSize = 9;         // Digits per decimal cell
+constexpr size_t kKaratsubaThreshold = 32;      // Threshold for Karatsuba multiplication
 
 // Small primes for quick divisibility rejection in prime generation
 constexpr auto kSmallPrimes = std::to_array<uint32_t>({
@@ -303,13 +304,122 @@ BigInt BigInt::operator + (const BigInt& addend) const
 
 BigInt& BigInt::operator += (const BigInt& augend)
 {
-    *this = *this + augend;
+    // Handle zero cases
+    if (augend.isZero()) {
+        return *this;
+    }
+    if (isZero()) {
+        *this = augend;
+        return *this;
+    }
+
+    // Same sign: add magnitudes
+    if (positive_ == augend.positive_) {
+        // Ensure we have enough space
+        if (digits_.size() < augend.digits_.size()) {
+            digits_.resize(augend.digits_.size(), 0);
+        }
+
+        uint32_t carry = 0;
+        size_t i = 0;
+        for (; i < augend.digits_.size(); ++i) {
+            uint64_t sum = static_cast<uint64_t>(digits_[i]) +
+                           static_cast<uint64_t>(augend.digits_[i]) +
+                           static_cast<uint64_t>(carry);
+            digits_[i] = static_cast<uint32_t>(sum & UINT32_MAX);
+            carry = static_cast<uint32_t>(sum >> 32);
+        }
+        // Propagate carry through remaining digits
+        for (; carry && i < digits_.size(); ++i) {
+            uint64_t sum = static_cast<uint64_t>(digits_[i]) + carry;
+            digits_[i] = static_cast<uint32_t>(sum & UINT32_MAX);
+            carry = static_cast<uint32_t>(sum >> 32);
+        }
+        if (carry) {
+            digits_.push_back(carry);
+        }
+    } else {
+        // Different signs: subtract smaller magnitude from larger
+        // Compare magnitudes
+        int cmp = compareMagnitude(augend);
+        if (cmp == 0) {
+            // Equal magnitudes, result is zero
+            digits_.clear();
+            digits_.push_back(0);
+            positive_ = true;
+            return *this;
+        }
+
+        const BigInt* larger;
+        const BigInt* smaller;
+        bool resultPositive;
+
+        if (cmp > 0) {
+            // |*this| > |augend|
+            larger = this;
+            smaller = &augend;
+            resultPositive = positive_;
+        } else {
+            // |*this| < |augend|
+            larger = &augend;
+            smaller = this;
+            resultPositive = augend.positive_;
+        }
+
+        // Subtract smaller from larger
+        std::vector<uint32_t> result;
+        result.resize(larger->digits_.size(), 0);
+
+        uint8_t borrow = 0;
+        for (size_t i = 0; i < larger->digits_.size(); ++i) {
+            int64_t diff = static_cast<int64_t>(larger->digits_[i]) -
+                           (i < smaller->digits_.size() ? static_cast<int64_t>(smaller->digits_[i]) : 0) -
+                           borrow;
+            if (diff >= 0) {
+                result[i] = static_cast<uint32_t>(diff);
+                borrow = 0;
+            } else {
+                result[i] = static_cast<uint32_t>(diff + static_cast<int64_t>(kBasisCalcSys));
+                borrow = 1;
+            }
+        }
+
+        digits_ = std::move(result);
+        positive_ = resultPositive;
+        deleteZeroHighOrderDigit();
+    }
+
     return *this;
 }
 
 BigInt& BigInt::operator ++()
 {
-    *this += BigInt(1);
+    if (positive_) {
+        // Positive number: add 1
+        if (digits_.empty()) {
+            digits_.push_back(1);
+            return *this;
+        }
+        for (size_t i = 0; i < digits_.size(); ++i) {
+            if (digits_[i] < UINT32_MAX) {
+                ++digits_[i];
+                return *this;  // No carry, done
+            }
+            digits_[i] = 0;  // Carry to next digit
+        }
+        digits_.push_back(1);  // All digits overflowed, add new digit
+    } else {
+        // Negative number: subtract 1 from magnitude
+        for (size_t i = 0; i < digits_.size(); ++i) {
+            if (digits_[i] > 0) {
+                --digits_[i];
+                deleteZeroHighOrderDigit();
+                if (isZero()) positive_ = true;  // Normalize -0 to +0
+                return *this;
+            }
+            digits_[i] = UINT32_MAX;  // Borrow from next digit
+        }
+    }
     return *this;
 }
 
@@ -395,13 +505,51 @@ BigInt BigInt::operator - (const BigInt& subtrahend) const
 
 BigInt& BigInt::operator -= (const BigInt& subtrahend)
 {
-    *this = *this - subtrahend;
-    return *this;
+    // a -= b is equivalent to a += (-b)
+    // Create a temporary with flipped sign and use +=
+    if (subtrahend.isZero()) {
+        return *this;
+    }
+
+    BigInt negated = subtrahend;
+    negated.positive_ = !subtrahend.positive_;
+    return *this += negated;
 }
 
 BigInt& BigInt::operator -- ()
 {
-    *this -= BigInt(1);
+    if (positive_) {
+        // Positive number: subtract 1 from magnitude
+        if (digits_.empty() || isZero()) {
+            // 0 - 1 = -1
+            digits_.clear();
+            digits_.push_back(1);
+            positive_ = false;
+            return *this;
+        }
+        for (size_t i = 0; i < digits_.size(); ++i) {
+            if (digits_[i] > 0) {
+                --digits_[i];
+                deleteZeroHighOrderDigit();
+                return *this;
+            }
+            digits_[i] = UINT32_MAX;  // Borrow from next digit
+        }
+    } else {
+        // Negative number: add 1 to magnitude
+        if (digits_.empty()) {
+            digits_.push_back(1);
+            return *this;
+        }
+        for (size_t i = 0; i < digits_.size(); ++i) {
+            if (digits_[i] < UINT32_MAX) {
+                ++digits_[i];
+                return *this;  // No carry, done
+            }
+            digits_[i] = 0;  // Carry to next digit
+        }
+        digits_.push_back(1);  // All digits overflowed, add new digit
+    }
     return *this;
 }
 
@@ -448,14 +596,22 @@ BigInt& BigInt::operator *= (const uint32_t multiplier)
 
 BigInt BigInt::operator * (const BigInt& multiplier) const
 {
-    BigInt product(0);
-    uint32_t shift = 0;
-    product.digits_.reserve(digits_.size() + multiplier.digits_.size());
-    for(std::vector<uint32_t>::const_iterator iteratorMultiplier = multiplier.digits_.cbegin(); iteratorMultiplier != multiplier.digits_.cend(); ++iteratorMultiplier, ++shift)
-    {
-        product += (*this * *iteratorMultiplier).shiftDigitsToHigh(shift);
+    // Handle zero cases early
+    if (isZero() || multiplier.isZero()) {
+        return BigInt();
     }
-    product.positive_ = positive_ == multiplier.positive_;
+
+    // Use Karatsuba for large numbers, schoolbook for small
+    BigInt product;
+    const size_t maxSize = std::max(digits_.size(), multiplier.digits_.size());
+    if (maxSize >= kKaratsubaThreshold) {
+        product = multiplyKaratsuba(multiplier);
+    } else {
+        product = multiplySchoolbook(multiplier);
+    }
+
+    // Set the sign: positive if both have same sign
+    product.positive_ = (positive_ == multiplier.positive_);
     return product;
 }
 
@@ -1609,6 +1765,104 @@ BigInt BigInt::shiftDigitsToLow(const size_t shift) const
         shifted.positive_ = true;
     }
     return shifted;
+}
+
+BigInt BigInt::multiplySchoolbook(const BigInt& other) const
+{
+    // Handle zero cases
+    if (digits_.empty() || other.digits_.empty()) {
+        return BigInt();
+    }
+    if (isZero() || other.isZero()) {
+        return BigInt();
+    }
+
+    const size_t m = digits_.size();
+    const size_t n = other.digits_.size();
+
+    BigInt result;
+    result.digits_.resize(m + n, 0);
+
+    for (size_t i = 0; i < m; ++i) {
+        uint64_t carry = 0;
+        for (size_t j = 0; j < n; ++j) {
+            uint64_t product = static_cast<uint64_t>(digits_[i]) *
+                               static_cast<uint64_t>(other.digits_[j]) +
+                               static_cast<uint64_t>(result.digits_[i + j]) + carry;
+            result.digits_[i + j] = static_cast<uint32_t>(product & UINT32_MAX);
+            carry = product >> 32;
+        }
+        result.digits_[i + n] = static_cast<uint32_t>(carry);
+    }
+
+    result.deleteZeroHighOrderDigit();
+    result.positive_ = true;  // Sign handled by caller
+    return result;
+}
+
+BigInt BigInt::multiplyKaratsuba(const BigInt& other) const
+{
+    // Handle zero cases
+    if (isZero() || other.isZero()) {
+        return BigInt();
+    }
+
+    const size_t m = digits_.size();
+    const size_t n = other.digits_.size();
+
+    // Base case: use schoolbook for small numbers
+    if (m < kKaratsubaThreshold || n < kKaratsubaThreshold) {
+        return multiplySchoolbook(other);
+    }
+
+    // Split point: half of the larger operand
+    const size_t half = (std::max(m, n) + 1) / 2;
+
+    // Split this = high1 * B^half + low1
+    BigInt low1, high1;
+    if (m <= half) {
+        low1 = *this;
+        low1.positive_ = true;
+        // high1 is zero (default)
+    } else {
+        low1.digits_.assign(digits_.begin(), digits_.begin() + static_cast<long>(half));
+        low1.positive_ = true;
+        low1.deleteZeroHighOrderDigit();
+        high1.digits_.assign(digits_.begin() + static_cast<long>(half), digits_.end());
+        high1.positive_ = true;
+        high1.deleteZeroHighOrderDigit();
+    }
+
+    // Split other = high2 * B^half + low2
+    BigInt low2, high2;
+    if (n <= half) {
+        low2 = other;
+        low2.positive_ = true;
+        // high2 is zero (default)
+    } else {
+        low2.digits_.assign(other.digits_.begin(), other.digits_.begin() + static_cast<long>(half));
+        low2.positive_ = true;
+        low2.deleteZeroHighOrderDigit();
+        high2.digits_.assign(other.digits_.begin() + static_cast<long>(half), other.digits_.end());
+        high2.positive_ = true;
+        high2.deleteZeroHighOrderDigit();
+    }
+
+    // Karatsuba: compute 3 products instead of 4
+    // z0 = low1 * low2
+    // z2 = high1 * high2
+    // z1 = (low1 + high1) * (low2 + high2) - z0 - z2
+    BigInt z0 = low1.multiplyKaratsuba(low2);
+    BigInt z2 = high1.multiplyKaratsuba(high2);
+
+    BigInt sum1 = abs(low1) + abs(high1);
+    BigInt sum2 = abs(low2) + abs(high2);
+    BigInt z1 = sum1.multiplyKaratsuba(sum2) - z0 - z2;
+
+    // Result = z2 * B^(2*half) + z1 * B^half + z0
+    BigInt result = z2.shiftDigitsToHigh(2 * half) + z1.shiftDigitsToHigh(half) + z0;
+    result.positive_ = true;  // Sign handled by caller
+    return result;
 }
 
 BigInt BigInt::toBigIntDec() const

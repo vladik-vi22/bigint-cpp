@@ -307,6 +307,16 @@ class BigInt {
   BigInt shiftDigitsToHigh(size_t shift) const;
   BigInt shiftDigitsToLow(size_t shift) const;
   BigInt toBigIntDec() const;
+
+  /// @brief Karatsuba multiplication helper for O(n^1.585) performance on large numbers.
+  /// @param other The multiplier.
+  /// @return Product of absolute values (sign handled by caller).
+  [[nodiscard]] BigInt multiplyKaratsuba(const BigInt& other) const;
+
+  /// @brief Schoolbook multiplication for small numbers or Karatsuba base case.
+  /// @param other The multiplier.
+  /// @return Product of absolute values (sign handled by caller).
+  [[nodiscard]] BigInt multiplySchoolbook(const BigInt& other) const;
 };
 
 }  // namespace bigint
