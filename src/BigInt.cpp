@@ -65,12 +65,11 @@ const BigInt kEight(static_cast<uint32_t>(8));
 
 }  // namespace constants
 
-BigInt::BigInt() {
+BigInt::BigInt() : positive_(true), digits_() {
 }
 
-BigInt::BigInt(const BigInt& other) {
-  digits_ = other.digits_;
-  positive_ = other.positive_;
+BigInt::BigInt(const BigInt& other)
+    : positive_(other.positive_), digits_(other.digits_) {
 }
 
 BigInt::BigInt(BigInt&& other) noexcept
