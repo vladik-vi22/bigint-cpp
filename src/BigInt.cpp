@@ -1225,12 +1225,12 @@ bool BigInt::isOdd() const noexcept
 
 bool BigInt::isPositive() const noexcept
 {
-    return positive_;
+    return positive_ && !isZero();
 }
 
 bool BigInt::isNegative() const noexcept
 {
-    return !positive_;
+    return !positive_ && !isZero();
 }
 
 void BigInt::alignTo(BigInt& aligned)
