@@ -627,34 +627,57 @@ std::pair<BigInt, BigInt> BigInt::DivMod(const BigInt& divisor) const
         throw std::domain_error("Division by zero");
     }
 
-    const size_t bitLengthDivisor = divisor.bitLength();
-    BigInt fraction(0);
-    BigInt remainder(abs(*this));
-    BigInt borrow;
-    size_t differenceRemainderNDivisorbitLength;
-    fraction.digits_.reserve(digits_.size());
-    while(remainder >= abs(divisor))
-    {
-        differenceRemainderNDivisorbitLength = remainder.bitLength() - bitLengthDivisor;
-        borrow = abs(divisor) << differenceRemainderNDivisorbitLength;
-        if(remainder < borrow)
-        {
-            borrow >>= 1;
-            --differenceRemainderNDivisorbitLength;
-        }
-        remainder -= borrow;
-        fraction += BigInt(1) << differenceRemainderNDivisorbitLength;  // 1 << n = 2^n
+    // Cache absolute value of divisor to avoid repeated computation
+    const BigInt absDivisor = abs(divisor);
+    const size_t bitLengthDivisor = absDivisor.bitLength();
+
+    BigInt quotient;
+    quotient.digits_.reserve(digits_.size());
+
+    BigInt remainder = abs(*this);
+
+    // Early exit for small dividend
+    if (remainder < absDivisor) {
+        quotient.positive_ = (positive_ == divisor.positive_);
+        remainder.positive_ = positive_;
+        return std::make_pair(quotient, remainder);
     }
-    fraction.positive_ = positive_ == divisor.positive_;
+
+    // Pre-allocate borrow with estimated size
+    BigInt borrow;
+    borrow.digits_.reserve(remainder.digits_.size());
+
+    while (remainder >= absDivisor) {
+        size_t bitDiff = remainder.bitLength() - bitLengthDivisor;
+        borrow = absDivisor << bitDiff;
+
+        if (remainder < borrow) {
+            borrow >>= 1;
+            --bitDiff;
+        }
+
+        remainder -= borrow;
+
+        // Optimize: create shifted 1 directly instead of BigInt(1) << n
+        BigInt shiftedOne;
+        size_t wordIdx = bitDiff / 32;
+        size_t bitIdx = bitDiff % 32;
+        shiftedOne.digits_.resize(wordIdx + 1, 0);
+        shiftedOne.digits_[wordIdx] = static_cast<uint32_t>(1) << bitIdx;
+        quotient += shiftedOne;
+    }
+
+    quotient.positive_ = (positive_ == divisor.positive_);
     remainder.positive_ = positive_;
-    if(divisor.positive_)
-    {
-        while(!remainder.positive_)
-        {
+
+    // Adjust for negative dividend
+    if (divisor.positive_) {
+        while (!remainder.positive_) {
             remainder += divisor;
         }
     }
-    return std::make_pair(fraction, remainder);
+
+    return std::make_pair(quotient, remainder);
 }
 
 BigInt BigInt::operator / (const BigInt& divisor) const
