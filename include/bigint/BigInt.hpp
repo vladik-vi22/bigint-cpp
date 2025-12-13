@@ -38,8 +38,10 @@ class BigInt {
   BigInt(BigInt&& other) noexcept;
 
   /// @brief Construct from string representation.
-  /// @param str Number as string (may include leading '-' for negative)
-  /// @param base Numeric base (2, 10, or 16; default: kDefaultInputBase)
+  /// @param str Number as string (may include leading '-' for negative).
+  ///            Empty string is treated as zero.
+  /// @param base Numeric base (2, 10, or 16; default: kDefaultInputBase).
+  /// @throws std::invalid_argument if str contains invalid characters for the base.
   explicit BigInt(std::string str, uint8_t base = kDefaultInputBase);
 
   /// @brief Construct from fixed-size array of 32-bit words (big-endian order).
@@ -86,51 +88,66 @@ class BigInt {
   /// @{
   [[nodiscard]] BigInt operator+() const;                       ///< Unary plus
   [[nodiscard]] BigInt operator+(const BigInt& addend) const;   ///< Addition
-  BigInt& operator+=(const BigInt& addend);       ///< Addition assignment
-  BigInt& operator++();                           ///< Pre-increment
-  BigInt operator++(int);                         ///< Post-increment
+  BigInt& operator+=(const BigInt& addend);                     ///< Addition assignment
+  BigInt& operator++();                                         ///< Pre-increment
+  BigInt operator++(int);                                       ///< Post-increment
 
   [[nodiscard]] BigInt operator-() const;                           ///< Unary minus (negation)
   [[nodiscard]] BigInt operator-(const BigInt& subtrahend) const;   ///< Subtraction
-  BigInt& operator-=(const BigInt& subtrahend);       ///< Subtraction assignment
-  BigInt& operator--();                               ///< Pre-decrement
-  BigInt operator--(int);                             ///< Post-decrement
+  BigInt& operator-=(const BigInt& subtrahend);                     ///< Subtraction assignment
+  BigInt& operator--();                                             ///< Pre-decrement
+  BigInt operator--(int);                                           ///< Post-decrement
 
   [[nodiscard]] BigInt operator*(const BigInt& multiplier) const;   ///< Multiplication
-  BigInt& operator*=(const BigInt& multiplier);       ///< Multiplication assignment
+  BigInt& operator*=(const BigInt& multiplier);                     ///< Multiplication assignment
 
-  [[nodiscard]] BigInt operator/(const BigInt& divisor) const;      ///< Integer division
-  BigInt& operator/=(const BigInt& divisor);          ///< Division assignment
+  /// @brief Integer division.
+  /// @throws std::domain_error if divisor is zero.
+  [[nodiscard]] BigInt operator/(const BigInt& divisor) const;
+  /// @brief Division assignment.
+  /// @throws std::domain_error if divisor is zero.
+  BigInt& operator/=(const BigInt& divisor);
 
-  [[nodiscard]] BigInt operator%(const BigInt& divisor) const;      ///< Modulo (remainder)
-  BigInt& operator%=(const BigInt& divisor);          ///< Modulo assignment
+  /// @brief Modulo (remainder).
+  /// @throws std::domain_error if divisor is zero.
+  [[nodiscard]] BigInt operator%(const BigInt& divisor) const;
+  /// @brief Modulo assignment.
+  /// @throws std::domain_error if divisor is zero.
+  BigInt& operator%=(const BigInt& divisor);
   /// @}
 
   /// @name Mathematical Functions
   /// @{
 
   /// @brief Compute base raised to exponent.
-  friend BigInt pow(const BigInt& base, const BigInt& exponent);
+  /// @return base^exponent (0 if exponent is negative).
+  [[nodiscard]] friend BigInt pow(const BigInt& base, const BigInt& exponent);
 
   /// @brief Compute floor of log base 2.
-  friend size_t log2(const BigInt& antilogarithm);
+  /// @return floor(log2(antilogarithm)), or 0 if antilogarithm <= 0.
+  [[nodiscard]] friend size_t log2(const BigInt& antilogarithm) noexcept;
 
   /// @brief Compute (base^exponent) mod divisor efficiently.
-  friend BigInt powmod(const BigInt& base, const BigInt& exponent,
-                       const BigInt& divisor);
+  /// @throws std::domain_error if divisor is zero.
+  [[nodiscard]] friend BigInt powmod(const BigInt& base, const BigInt& exponent,
+                                     const BigInt& divisor);
 
   /// @brief Compute modular multiplicative inverse.
-  friend BigInt inversemod(BigInt dividend, const BigInt& divisor);
+  /// @return x such that (dividend * x) mod divisor == 1.
+  /// @throws std::domain_error if divisor is zero or inverse doesn't exist.
+  [[nodiscard]] friend BigInt inversemod(BigInt dividend, const BigInt& divisor);
 
-  /// @brief Check if dividend1 = dividend2 (mod divisor).
-  friend bool congruencemod(const BigInt& dividend1, const BigInt& dividend2,
-                            const BigInt& divisor);
+  /// @brief Check if dividend1 ≡ dividend2 (mod divisor).
+  /// @throws std::domain_error if divisor is zero.
+  [[nodiscard]] friend bool congruencemod(const BigInt& dividend1, const BigInt& dividend2,
+                                          const BigInt& divisor);
 
   /// @brief Check if two numbers are coprime (gcd == 1).
-  friend bool isCoprime(const BigInt& a, const BigInt& b);
+  [[nodiscard]] friend bool isCoprime(const BigInt& a, const BigInt& b);
 
   /// @brief Compute Jacobi symbol (a/n).
-  friend int8_t symbolJacobi(BigInt a, BigInt b);
+  /// @return -1, 0, or 1 representing the Jacobi symbol.
+  [[nodiscard]] friend int8_t symbolJacobi(BigInt a, BigInt b);
   /// @}
 
   /// @name Bitwise Operators
@@ -170,13 +187,27 @@ class BigInt {
 
   /// @name Utility Functions
   /// @{
-  friend BigInt abs(const BigInt& value);               ///< Absolute value
-  friend BigInt sqrt(const BigInt& value);              ///< Integer square root (floor)
-  friend BigInt gcd(BigInt a, BigInt b);                ///< Greatest common divisor
-  friend BigInt lcm(const BigInt& a, const BigInt& b);  ///< Least common multiple
-  friend const BigInt& max(const BigInt& a, const BigInt& b) noexcept;  ///< Maximum
-  friend const BigInt& min(const BigInt& a, const BigInt& b) noexcept;  ///< Minimum
-  friend void swap(BigInt& lhs, BigInt& rhs) noexcept;  ///< Swap two values
+  /// @brief Compute absolute value.
+  [[nodiscard]] friend BigInt abs(const BigInt& value);
+
+  /// @brief Compute integer square root (floor).
+  /// @throws std::domain_error if value is negative.
+  [[nodiscard]] friend BigInt sqrt(const BigInt& value);
+
+  /// @brief Compute greatest common divisor.
+  [[nodiscard]] friend BigInt gcd(BigInt a, BigInt b);
+
+  /// @brief Compute least common multiple.
+  [[nodiscard]] friend BigInt lcm(const BigInt& a, const BigInt& b);
+
+  /// @brief Return the larger of two values.
+  [[nodiscard]] friend const BigInt& max(const BigInt& a, const BigInt& b) noexcept;
+
+  /// @brief Return the smaller of two values.
+  [[nodiscard]] friend const BigInt& min(const BigInt& a, const BigInt& b) noexcept;
+
+  /// @brief Swap two BigInt values.
+  friend void swap(BigInt& lhs, BigInt& rhs) noexcept;
   /// @}
 
   /// @name Number Theory

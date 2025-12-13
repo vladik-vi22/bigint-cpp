@@ -268,8 +268,8 @@ TEST_F(BigIntArithmeticTest, InverseModNotCoprime) {
     // 6 and 9 are not coprime (gcd = 3), so no inverse exists
     BigInt a("6", 10);
     BigInt mod("9", 10);
-    BigInt inv = inversemod(a, mod);
-    EXPECT_EQ(inv.toStdString(10), "0");  // Returns 0 when no inverse
+    // Now throws std::domain_error when inverse doesn't exist
+    EXPECT_THROW([[maybe_unused]] auto _ = inversemod(a, mod), std::domain_error);
 }
 
 TEST_F(BigIntArithmeticTest, CongruenceMod) {

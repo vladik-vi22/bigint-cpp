@@ -8,6 +8,7 @@
 #include <iomanip>
 #include <random>
 #include <sstream>
+#include <stdexcept>
 
 namespace bigint {
 
@@ -98,6 +99,28 @@ BigInt::BigInt(std::string str, const uint8_t base) {
   } else {
     positive_ = true;
   }
+
+  // Validate input characters before processing
+  auto isValidChar = [base](char c) -> bool {
+    if (base == kBaseBinary) {
+      return c == '0' || c == '1';
+    } else if (base == kBaseDecimal) {
+      return c >= '0' && c <= '9';
+    } else if (base == kBaseHexadecimal) {
+      return (c >= '0' && c <= '9') || (c >= 'A' && c <= 'F') || (c >= 'a' && c <= 'f');
+    }
+    return false;
+  };
+
+  for (size_t i = 0; i < str.size(); ++i) {
+    if (!isValidChar(str[i])) {
+      throw std::invalid_argument(
+          "Invalid character '" + std::string(1, str[i]) +
+          "' at position " + std::to_string(i) +
+          " for base " + std::to_string(base));
+    }
+  }
+
   if (base == kBaseDecimal) {
     str = DecimalToBinaryString(str);
   }
@@ -444,6 +467,10 @@ BigInt& BigInt::operator *= (const BigInt& multiplier)
 
 std::pair<BigInt, BigInt> BigInt::DivMod(const BigInt& divisor) const
 {
+    if (divisor.isZero()) {
+        throw std::domain_error("Division by zero");
+    }
+
     const size_t bitLengthDivisor = divisor.bitLength();
     BigInt fraction(0);
     BigInt remainder(abs(*this));
@@ -523,7 +550,7 @@ BigInt pow(const BigInt& base, const BigInt& exponent)
     return power;
 }
 
-size_t log2(const BigInt& antilogarithm)
+size_t log2(const BigInt& antilogarithm) noexcept
 {
     return antilogarithm.bitLength() - 1;
 }
@@ -547,6 +574,10 @@ size_t log2(const BigInt& antilogarithm)
 
 BigInt powmod(const BigInt& base, const BigInt& exponent, const BigInt& divisor)
 {
+    if (divisor.isZero()) {
+        throw std::domain_error("Modular exponentiation with zero divisor");
+    }
+
     BigInt power(1);
     power.digits_.reserve(divisor.digits_.size());
     const size_t bitLen = exponent.bitLength();
@@ -564,10 +595,13 @@ BigInt powmod(const BigInt& base, const BigInt& exponent, const BigInt& divisor)
 
 BigInt inversemod(BigInt dividend, const BigInt& divisor)
 {
-    if(!divisor || !isCoprime(dividend, divisor))
-    {
-        return BigInt(0);
+    if (divisor.isZero()) {
+        throw std::domain_error("Modular inverse with zero divisor");
     }
+    if (!isCoprime(dividend, divisor)) {
+        throw std::domain_error("Modular inverse does not exist (numbers not coprime)");
+    }
+
     BigInt divisor_copy(divisor);
     BigInt fraction;
     BigInt x0(0);
@@ -592,6 +626,10 @@ BigInt inversemod(BigInt dividend, const BigInt& divisor)
 
 bool congruencemod(const BigInt& dividend1, const BigInt& dividend2, const BigInt& divisor)
 {
+    if (divisor.isZero()) {
+        throw std::domain_error("Congruence check with zero divisor");
+    }
+
     BigInt remainder1(dividend1 % divisor);
     BigInt remainder2(dividend2 % divisor);
     while(!remainder1.positive_)
@@ -989,8 +1027,7 @@ BigInt sqrt(const BigInt& value)
     // Handle special cases
     if (value.isZero()) return BigInt();
     if (!value.positive_) {
-        // sqrt of negative is undefined; return 0
-        return BigInt();
+        throw std::domain_error("Square root of negative number is undefined");
     }
     if (value == BigInt(1)) return BigInt(1);
 
