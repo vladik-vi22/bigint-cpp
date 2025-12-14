@@ -18,15 +18,17 @@ A self-contained BigInt implementation extracted from a cryptography learning pr
 
 ## Features
 
-**Arithmetic:** `+`, `-`, `*`, `/`, `%`, `pow`, `log2`
+**Arithmetic:** `+`, `-`, `*`, `/`, `%`, `pow`, `sqrt`, `log2`
 
 **Modular arithmetic:** `powmod`, `inversemod`, `congruencemod`, `isCoprime`, `symbolJacobi`
 
 **Bitwise:** `~`, `&`, `|`, `^`, `<<`, `>>`, circular shifts
 
-**Number theory:** `gcd` (binary algorithm), `lcm`, `abs`
+**Number theory:** `gcd` (binary algorithm), `lcm`, `abs`, `isProbablePrime`, `nextPrime`, `randomPrime`
 
-**I/O:** Construct from decimal/hex/binary strings, `std::vector<uint8_t>`, integers. Convert back to any format.
+**Random:** `randomBits`, `randomBelow`
+
+**I/O:** Construct from decimal/hex/binary strings, `std::vector<uint8_t>`, `std::span<T>`, integers. Convert back to any format.
 
 ## Installation
 
@@ -76,6 +78,9 @@ auto inv = inversemod(BigInt(17), BigInt(3120));  // 17^(-1) mod 3120
 // Number theory
 auto g = gcd(a, b);
 auto jacobi = symbolJacobi(BigInt(1001), BigInt(9907));  // returns -1, 0, or 1
+
+// Prime generation
+auto prime = BigInt::randomPrime(256);  // 256-bit random prime
 ```
 
 ## Build
@@ -86,11 +91,33 @@ cmake --build build --config Release
 ctest --test-dir build -C Release
 ```
 
+## Benchmarks
+
+Run comparison benchmarks against Boost.Multiprecision:
+
+```bash
+cmake -B build -DBIGINT_BUILD_COMPARISON_BENCHMARKS=ON
+cmake --build build --config Release
+./build/benchmarks/bigint_comparison_benchmarks
+```
+
+| Operation | bigint-cpp | Boost.Multiprecision | Notes |
+|-----------|------------|---------------------|-------|
+| Add | 76 ns | 59 ns | ~1.3x slower |
+| Multiply | 117 ns | 90 ns | ~1.3x slower |
+| Divide | 67 μs | 1 μs | Room for optimization |
+| PowMod | 462 μs | 9 μs | Room for optimization |
+| GCD | 9 μs | 0.5 μs | Room for optimization |
+
+*Tested with ~600-bit numbers on MSVC 19.50, Release build.*
+
 ## Internals
 
 - `std::vector<uint32_t>` storage, little-endian, base 2³²
-- Schoolbook multiplication O(n²), binary GCD, square-and-multiply for powmod
-- ~40 unit tests, Google Benchmark suite included
+- Schoolbook O(n²) for small numbers, Karatsuba for large (threshold: 32 words)
+- Binary GCD (Stein's algorithm), square-and-multiply for powmod
+- Miller-Rabin primality testing with deterministic witnesses for small numbers
+- 122 unit tests, Google Benchmark suite included
 
 ## License
 
