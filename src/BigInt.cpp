@@ -1,3 +1,27 @@
+/**
+ * @file BigInt.cpp
+ * @brief Implementation of arbitrary precision integer arithmetic.
+ *
+ * @details
+ * ## Internal Representation
+ * - **Storage**: Little-endian vector of 32-bit words (`digits_`)
+ *   - `digits_[0]` contains the least significant 32 bits
+ *   - `digits_.back()` contains the most significant bits
+ * - **Sign**: Sign-magnitude encoding via `positive_` flag
+ *   - Zero is always represented as positive
+ *
+ * ## Algorithms
+ * - **Multiplication**: Schoolbook for small numbers, Karatsuba for large (threshold: 32 words)
+ * - **Division**: Binary long division with bit-shifting optimization
+ * - **Primality**: Miller-Rabin with deterministic witnesses for small numbers
+ * - **GCD**: Binary GCD (Stein's algorithm)
+ *
+ * ## Performance Considerations
+ * - Operations reserve capacity to minimize reallocations
+ * - Karatsuba multiplication reduces complexity from O(n²) to O(n^1.585)
+ * - Small prime sieve accelerates primality testing
+ */
+
 #include <bigint/BigInt.hpp>
 
 #include <algorithm>
@@ -6,60 +30,96 @@
 #include <cmath>
 #include <compare>
 #include <iomanip>
+#include <iterator>
 #include <random>
+#include <ranges>
 #include <sstream>
 #include <stdexcept>
 
 namespace bigint {
 
+// ============================================================================
+// Internal Constants
+// ============================================================================
+
 namespace {
 
-// Internal constants (not exposed in public API)
-constexpr uint64_t kBasisCalcSys = 1ULL << 32;  // 2^32 for carry calculations
-constexpr uint32_t kBasisCalcDec = 1000000000;  // 10^9 for decimal conversion
-constexpr uint8_t kDecimalCellSize = 9;         // Digits per decimal cell
-constexpr size_t kKaratsubaThreshold = 32;      // Threshold for Karatsuba multiplication
+/// Number of bits per digit (32-bit words)
+constexpr size_t kBitsPerDigit = 32;
 
-// Small primes for quick divisibility rejection in prime generation
+/// Mask for extracting bit position within a digit (0-31)
+constexpr size_t kBitIndexMask = kBitsPerDigit - 1;
+
+/// Number of bits to shift to convert bit index to digit index
+constexpr size_t kDigitShift = 5;  // log2(32)
+
+/// Base for carry calculations (2^32)
+constexpr uint64_t kDigitBase = 1ULL << kBitsPerDigit;
+
+/// Base for decimal conversion (10^9, largest power of 10 fitting in 32 bits)
+constexpr uint32_t kDecimalBase = 1'000'000'000;
+
+/// Digits per decimal cell (log10(kDecimalBase))
+constexpr uint8_t kDecimalCellSize = 9;
+
+/// Threshold for switching from schoolbook to Karatsuba multiplication
+constexpr size_t kKaratsubaThreshold = 32;
+
+/// Small primes for quick divisibility rejection in prime generation
 constexpr auto kSmallPrimes =
     std::to_array<uint32_t>({3,  5,  7,  11, 13, 17, 19, 23, 29, 31,  37,  41,  43,  47, 53,
                              59, 61, 67, 71, 73, 79, 83, 89, 97, 101, 103, 107, 109, 113});
 
-/// Converts a decimal string to a binary string.
-/// Internal helper function for string constructor.
+/**
+ * @brief Converts a decimal string to a binary string.
+ * @param decimal_str Decimal number as string (no sign prefix).
+ * @return Binary representation as string.
+ * @details Uses repeated division by 2, processing 9 decimal digits at a time
+ *          for efficiency. Each iteration extracts one binary digit.
+ */
 std::string decimalToBinaryString(std::string decimal_str) {
   if (decimal_str == "0") {
     return "0";
   }
+
   std::string binary_str;
-  std::vector<uint32_t> digits;
-  std::vector<uint32_t> zero_arr;
+  std::vector<uint32_t> cells;
   uint32_t carry_next = 0;
   uint32_t carry_current = 0;
 
+  // Pad to multiple of kDecimalCellSize for uniform cell processing
   while (decimal_str.length() % kDecimalCellSize) {
     decimal_str.insert(0, 1, '0');
   }
-  size_t num_cells = decimal_str.length() / kDecimalCellSize;
-  digits.reserve(num_cells);
+
+  // Parse decimal string into cells of 9 digits each
+  const size_t num_cells = decimal_str.length() / kDecimalCellSize;
+  cells.reserve(num_cells);
   for (size_t i = 0; i < num_cells; ++i) {
-    digits.emplace_back(static_cast<uint32_t>(
+    cells.emplace_back(static_cast<uint32_t>(
         std::stoul(decimal_str.substr(i * kDecimalCellSize, kDecimalCellSize), nullptr, 10)));
   }
-  zero_arr.resize(digits.size(), 0);
-  while (digits != zero_arr) {
+
+  // Repeated division by 2 to extract binary digits
+  const std::vector<uint32_t> zero_cells(cells.size(), 0);
+  while (cells != zero_cells) {
     carry_next = 0;
-    for (auto it = digits.begin(); it != digits.end(); ++it) {
+    for (auto& cell : cells) {
       carry_current = carry_next;
-      carry_next = (*it & 1);
-      *it = (*it + carry_current * kBasisCalcDec) >> 1;
+      carry_next = (cell & 1);
+      cell = (cell + carry_current * kDecimalBase) >> 1;
     }
     binary_str.insert(binary_str.begin(), 1, carry_next ? '1' : '0');
   }
+
   return binary_str;
 }
 
 }  // anonymous namespace
+
+// ============================================================================
+// Constructors
+// ============================================================================
 
 BigInt::BigInt() : positive_(true), digits_() {}
 
@@ -130,25 +190,33 @@ BigInt::BigInt(std::string str, const uint8_t base) {
 }
 
 BigInt::BigInt(const std::vector<bool>& vec, const bool is_positive_) {
-  digits_.reserve(vec.size() & 31 ? (vec.size() >> 5) + 1 : vec.size() >> 5);
-  uint32_t element;
+  const size_t remainder_bits = vec.size() & kBitIndexMask;
+  const size_t full_digits = vec.size() >> kDigitShift;
+  digits_.reserve(remainder_bits ? full_digits + 1 : full_digits);
+
+  uint32_t digit = 0;
   auto it = vec.crbegin();
-  for (size_t i = 0; i < (vec.size() >> 5); ++i) {
-    element = 0;
-    for (uint8_t bit_idx = 0; bit_idx < 32; ++bit_idx) {
-      element |= static_cast<uint32_t>(*it) << bit_idx;
+
+  // Process full 32-bit digits
+  for (size_t i = 0; i < full_digits; ++i) {
+    digit = 0;
+    for (size_t bit_idx = 0; bit_idx < kBitsPerDigit; ++bit_idx) {
+      digit |= static_cast<uint32_t>(*it) << bit_idx;
       ++it;
     }
-    digits_.emplace_back(element);
+    digits_.emplace_back(digit);
   }
-  if (vec.size() & 31) {
-    element = 0;
-    for (uint8_t bit_idx = 0; bit_idx < (vec.size() & 31); ++bit_idx) {
-      element |= static_cast<uint32_t>(*it) << bit_idx;
+
+  // Process remaining bits (partial digit)
+  if (remainder_bits) {
+    digit = 0;
+    for (size_t bit_idx = 0; bit_idx < remainder_bits; ++bit_idx) {
+      digit |= static_cast<uint32_t>(*it) << bit_idx;
       ++it;
     }
-    digits_.emplace_back(element);
+    digits_.emplace_back(digit);
   }
+
   deleteZeroHighOrderDigit();
   positive_ = is_positive_;
 }
@@ -156,9 +224,7 @@ BigInt::BigInt(const std::vector<bool>& vec, const bool is_positive_) {
 BigInt::BigInt(std::span<const uint32_t> data, const bool is_positive_) : positive_(is_positive_) {
   digits_.reserve(data.size());
   // Input is big-endian, internal storage is little-endian
-  for (auto it = data.rbegin(); it != data.rend(); ++it) {
-    digits_.emplace_back(*it);
-  }
+  std::ranges::copy(std::views::reverse(data), std::back_inserter(digits_));
   deleteZeroHighOrderDigit();
 }
 
@@ -218,6 +284,10 @@ void BigInt::initFromSigned(const int64_t value) {
   deleteZeroHighOrderDigit();
 }
 
+// ============================================================================
+// Assignment Operators
+// ============================================================================
+
 BigInt& BigInt::operator=(const BigInt& other) {
   if (this != &other) {
     digits_ = other.digits_;
@@ -234,6 +304,10 @@ BigInt& BigInt::operator=(BigInt&& other) noexcept {
   }
   return *this;
 }
+
+// ============================================================================
+// Arithmetic Operators
+// ============================================================================
 
 BigInt BigInt::operator+() const {
   return *this;
@@ -341,7 +415,7 @@ BigInt& BigInt::operator+=(const BigInt& addend) {
         result[i] = static_cast<uint32_t>(diff);
         borrow = 0;
       } else {
-        result[i] = static_cast<uint32_t>(diff + static_cast<int64_t>(kBasisCalcSys));
+        result[i] = static_cast<uint32_t>(diff + static_cast<int64_t>(kDigitBase));
         borrow = 1;
       }
     }
@@ -414,7 +488,7 @@ BigInt BigInt::operator-(const BigInt& subtrahend) const {
           borrow = 0;
         } else {
           diff.digits_.emplace_back(
-              static_cast<uint32_t>(temp_diff + static_cast<int64_t>(kBasisCalcSys)));
+              static_cast<uint32_t>(temp_diff + static_cast<int64_t>(kDigitBase)));
           borrow = 1;
         }
         ++minuend_it;
@@ -428,7 +502,7 @@ BigInt BigInt::operator-(const BigInt& subtrahend) const {
           borrow = 0;
         } else {
           diff.digits_.emplace_back(
-              static_cast<uint32_t>(temp_diff + static_cast<int64_t>(kBasisCalcSys)));
+              static_cast<uint32_t>(temp_diff + static_cast<int64_t>(kDigitBase)));
           borrow = 1;
         }
         ++minuend_it;
@@ -502,9 +576,9 @@ BigInt BigInt::operator*(uint32_t multiplier) const {
   uint32_t carry = 0;
   product.digits_.reserve(digits_.size() + 1);
 
-  for (auto it = digits_.cbegin(); it != digits_.cend(); ++it) {
-    uint64_t temp_product = static_cast<uint64_t>(*it) * static_cast<uint64_t>(multiplier) +
-                            static_cast<uint64_t>(carry);
+  for (const auto& digit : digits_) {
+    uint64_t temp_product =
+        static_cast<uint64_t>(digit) * static_cast<uint64_t>(multiplier) + carry;
     product.digits_.emplace_back(static_cast<uint32_t>(temp_product & UINT32_MAX));
     carry = static_cast<uint32_t>(temp_product >> 32);
   }
@@ -596,8 +670,8 @@ std::pair<BigInt, BigInt> BigInt::DivMod(const BigInt& divisor) const {
 
     // Create power of 2 directly
     BigInt power_of_two;
-    size_t word_idx = bit_diff / 32;
-    size_t bit_idx = bit_diff % 32;
+    const size_t word_idx = bit_diff >> kDigitShift;
+    const size_t bit_idx = bit_diff & kBitIndexMask;
     power_of_two.digits_.resize(word_idx + 1, 0);
     power_of_two.digits_[word_idx] = static_cast<uint32_t>(1) << bit_idx;
     quotient += power_of_two;
@@ -662,9 +736,9 @@ uint32_t BigInt::operator%(const uint32_t divisor) const {
   const uint64_t base = static_cast<uint64_t>(1) << 32;
   uint64_t remainder = 0;
 
-  for (auto it = digits_.crbegin(); it != digits_.crend(); ++it) {
+  for (const auto& digit : std::views::reverse(digits_)) {
     // remainder is already < divisor, so remainder * base fits in 64 bits
-    remainder = (remainder * base + *it) % divisor;
+    remainder = (remainder * base + digit) % divisor;
   }
 
   return static_cast<uint32_t>(remainder);
@@ -674,6 +748,10 @@ BigInt& BigInt::operator%=(const BigInt& divisor) {
   *this = DivMod(divisor).second;
   return *this;
 }
+
+// ============================================================================
+// Mathematical Functions
+// ============================================================================
 
 BigInt pow(const BigInt& base, const BigInt& exponent) {
   if (!exponent.positive_) {
@@ -840,6 +918,10 @@ int8_t symbolJacobi(BigInt a, BigInt n) {
   return result;
 }
 
+// ============================================================================
+// Bitwise Operators
+// ============================================================================
+
 BigInt BigInt::operator~() const {
   return -*this - BigInt(1);
 }
@@ -949,13 +1031,17 @@ BigInt& BigInt::operator^=(const BigInt& rhs) {
   return *this;
 }
 
+// ============================================================================
+// Shift Operators
+// ============================================================================
+
 BigInt BigInt::operator<<(size_t shift) const {
   if (!shift || digits_.empty() || !(*this)) {
     return *this;
   }
 
-  const size_t digit_shift = shift / 32;
-  const size_t bit_shift = shift % 32;
+  const size_t digit_shift = shift / kBitsPerDigit;
+  const size_t bit_shift = shift & kBitIndexMask;
 
   BigInt result;
   result.positive_ = positive_;
@@ -966,9 +1052,9 @@ BigInt BigInt::operator<<(size_t shift) const {
     result.digits_.insert(result.digits_.end(), digits_.begin(), digits_.end());
   } else {
     uint32_t carry = 0;
-    for (auto it = digits_.cbegin(); it != digits_.cend(); ++it) {
-      uint32_t shifted_digit = (*it << bit_shift) | carry;
-      carry = *it >> (32 - bit_shift);
+    for (const auto& digit : digits_) {
+      uint32_t shifted_digit = (digit << bit_shift) | carry;
+      carry = digit >> (kBitsPerDigit - bit_shift);
       result.digits_.emplace_back(shifted_digit);
     }
     if (carry) {
@@ -989,8 +1075,8 @@ BigInt BigInt::operator>>(size_t shift) const {
     return *this;
   }
 
-  const size_t digit_shift = shift / 32;
-  const size_t bit_shift = shift % 32;
+  const size_t digit_shift = shift / kBitsPerDigit;
+  const size_t bit_shift = shift & kBitIndexMask;
 
   if (digit_shift >= digits_.size()) {
     return BigInt(0);
@@ -1012,7 +1098,7 @@ BigInt BigInt::operator>>(size_t shift) const {
     for (auto it = digits_.crbegin(); it != digits_.crend() - static_cast<long>(digit_shift);
          ++it) {
       uint32_t shifted_digit = (*it >> bit_shift) | carry;
-      carry = (*it & mask) << (32 - bit_shift);
+      carry = (*it & mask) << (kBitsPerDigit - bit_shift);
       result.digits_.emplace_back(shifted_digit);
     }
 
@@ -1037,6 +1123,10 @@ BigInt BigInt::rightCircularShift(size_t shift) const {
   const BigInt mask(--(BigInt(1) << bitLength()));
   return (((*this >> shift) | (*this << (bitLength() - shift))) & mask);
 }
+
+// ============================================================================
+// Comparison Operators
+// ============================================================================
 
 bool BigInt::operator!() const noexcept {
   for (const auto& digit : digits_) {
@@ -1178,12 +1268,16 @@ int BigInt::compareMagnitude(const BigInt& other) const noexcept {
     return -1;
   }
 
-  for (auto left_it = digits_.crbegin(), right_it = other.digits_.crbegin();
-       left_it != digits_.crend(); ++left_it, ++right_it) {
-    if (*left_it > *right_it)
+  // Compare from most significant digit (end of vector) to least significant
+  for (size_t i = digits_.size(); i > 0; --i) {
+    const auto& left_digit = digits_[i - 1];
+    const auto& right_digit = other.digits_[i - 1];
+    if (left_digit > right_digit) {
       return 1;
-    if (*left_it < *right_it)
+    }
+    if (left_digit < right_digit) {
       return -1;
+    }
   }
 
   return 0;
@@ -1368,19 +1462,19 @@ BigInt BigInt::randomBits(size_t num_bits) {
   static std::mt19937_64 gen(rd());
   static std::uniform_int_distribution<uint32_t> dist32(0, UINT32_MAX);
 
-  size_t num_words = (num_bits + 31) / 32;
+  const size_t num_words = (num_bits + kBitIndexMask) / kBitsPerDigit;
   std::vector<uint32_t> digits(num_words);
 
   for (size_t i = 0; i < num_words; ++i) {
     digits[i] = dist32(gen);
   }
 
-  size_t top_bits = num_bits % 32;
+  size_t top_bits = num_bits & kBitIndexMask;
   if (top_bits == 0) {
-    top_bits = 32;
+    top_bits = kBitsPerDigit;
   }
 
-  uint32_t mask = (1U << top_bits) - 1;
+  const uint32_t mask = (1U << top_bits) - 1;
   digits.back() &= mask;
   digits.back() |= (1U << (top_bits - 1));
 
@@ -1485,6 +1579,10 @@ BigInt BigInt::nextPrime() const {
   throw std::runtime_error("nextPrime: exceeded maximum iterations");
 }
 
+// ============================================================================
+// I/O Operators
+// ============================================================================
+
 std::ostream& operator<<(std::ostream& out, const BigInt& value) {
   // Respect stream format flags like std::hex, std::uppercase, std::showbase
   const auto flags = out.flags();
@@ -1557,6 +1655,10 @@ std::istream& operator>>(std::istream& in, BigInt& value) {
 //   return remainder;
 // }
 
+// ============================================================================
+// Conversion Functions
+// ============================================================================
+
 std::string BigInt::toStdString(const uint8_t base) const {
   std::stringstream ss;
 
@@ -1569,17 +1671,17 @@ std::string BigInt::toStdString(const uint8_t base) const {
   }
 
   if (base == kBaseBinary) {
-    for (auto it = digits_.crbegin(); it != digits_.crend(); ++it) {
-      ss << std::bitset<sizeof(uint32_t) * 8>(*it);
+    for (const auto& digit : std::views::reverse(digits_)) {
+      ss << std::bitset<sizeof(uint32_t) * 8>(digit);
     }
   } else if (base == kBaseHexadecimal) {
-    for (auto it = digits_.crbegin(); it != digits_.crend(); ++it) {
-      ss << std::hex << std::setw(8) << std::setfill('0') << *it;
+    for (const auto& digit : std::views::reverse(digits_)) {
+      ss << std::hex << std::setw(8) << std::setfill('0') << digit;
     }
   } else {  // base == kBaseDecimal
     const BigInt decimal_repr = toBigIntDec();
-    for (auto it = decimal_repr.digits_.crbegin(); it != decimal_repr.digits_.crend(); ++it) {
-      ss << std::dec << std::setw(9) << std::setfill('0') << *it;
+    for (const auto& digit : std::views::reverse(decimal_repr.digits_)) {
+      ss << std::dec << std::setw(9) << std::setfill('0') << digit;
     }
   }
 
@@ -1599,24 +1701,26 @@ BigInt::operator std::vector<uint8_t>() const {
   }
 
   std::vector<uint8_t> result;
-  size_t num_bytes = byteLength();
+  const size_t num_bytes = byteLength();
   result.reserve(num_bytes);
 
-  auto it = digits_.crbegin();
-  size_t partial_bytes = num_bytes % sizeof(uint32_t);
+  const size_t partial_bytes = num_bytes % sizeof(uint32_t);
 
-  if (partial_bytes) {
+  // Handle partial bytes from the most significant digit
+  if (partial_bytes > 0) {
+    const uint32_t high_digit = digits_.back();
     for (size_t i = 0; i < partial_bytes; ++i) {
-      result.emplace_back(static_cast<uint8_t>(*it >> ((partial_bytes - i - 1) * 8)));
+      result.emplace_back(static_cast<uint8_t>(high_digit >> ((partial_bytes - i - 1) * 8)));
     }
-    ++it;
   }
 
-  while (it != digits_.crend()) {
-    for (uint8_t i = 0; i < sizeof(uint32_t); ++i) {
-      result.emplace_back(static_cast<uint8_t>(*it >> ((sizeof(uint32_t) - i - 1) * 8)));
+  // Handle remaining full 32-bit digits (from second-to-last down to first)
+  const size_t start_idx = partial_bytes > 0 ? digits_.size() - 1 : digits_.size();
+  for (size_t idx = start_idx; idx > 0; --idx) {
+    const uint32_t digit = digits_[idx - 1];
+    for (uint8_t byte_idx = 0; byte_idx < sizeof(uint32_t); ++byte_idx) {
+      result.emplace_back(static_cast<uint8_t>(digit >> ((sizeof(uint32_t) - byte_idx - 1) * 8)));
     }
-    ++it;
   }
 
   return result;
@@ -1680,6 +1784,10 @@ size_t BigInt::byteLength() const noexcept {
 
   return len + high_bytes;
 }
+
+// ============================================================================
+// Private Helper Methods
+// ============================================================================
 
 void BigInt::alignTo(BigInt& other) {
   if (digits_.size() > other.digits_.size()) {
@@ -1805,14 +1913,14 @@ BigInt BigInt::multiplyKaratsuba(const BigInt& other) const {
 }
 
 BigInt BigInt::toBigIntDec() const {
-  const BigInt kDecimalBase(1000000000);
+  const BigInt decimal_divisor(kDecimalBase);
   BigInt value = abs(*this);
   BigInt result;
   result.positive_ = positive_;
   result.digits_.reserve(digits_.size() + 1);
 
   while (value) {
-    auto [quotient, remainder] = value.DivMod(kDecimalBase);
+    auto [quotient, remainder] = value.DivMod(decimal_divisor);
     result.digits_.emplace_back(remainder.digits_.front());
     value = quotient;
   }
