@@ -26,6 +26,8 @@ using namespace bigint;
 
 static const char* NUM_SMALL = "12345678901234567890123456789012345678901234567890";
 static const char* NUM_SMALL_B = "98765432109876543210987654321098765432109876543210";
+// Odd modulus for Montgomery algorithm testing (ends in 7)
+static const char* NUM_SMALL_ODD = "98765432109876543210987654321098765432109876543217";
 
 static const char* NUM_LARGE =
     "123456789012345678901234567890123456789012345678901234567890"
@@ -128,22 +130,35 @@ BENCHMARK(BM_GMP_Divide);
 // Modular Exponentiation Comparison (powmod)
 // ============================================================================
 
-static void BM_BigInt_PowMod(benchmark::State& state) {
+// Standard algorithm (even modulus - Montgomery not applicable)
+static void BM_BigInt_PowMod_Standard(benchmark::State& state) {
   BigInt base(NUM_SMALL);
   BigInt exp("65537");
-  BigInt mod(NUM_SMALL_B);
+  BigInt mod(NUM_SMALL_B);  // Even modulus
   for (auto _ : state) {
     BigInt result = powmod(base, exp, mod);
     benchmark::DoNotOptimize(result);
   }
 }
-BENCHMARK(BM_BigInt_PowMod);
+BENCHMARK(BM_BigInt_PowMod_Standard);
+
+// Montgomery algorithm (odd modulus - but small, may not trigger Montgomery)
+static void BM_BigInt_PowMod_OddSmall(benchmark::State& state) {
+  BigInt base(NUM_SMALL);
+  BigInt exp("65537");
+  BigInt mod(NUM_SMALL_ODD);  // Odd modulus (166 bits, ~5 words - below threshold)
+  for (auto _ : state) {
+    BigInt result = powmod(base, exp, mod);
+    benchmark::DoNotOptimize(result);
+  }
+}
+BENCHMARK(BM_BigInt_PowMod_OddSmall);
 
 static void BM_GMP_PowMod(benchmark::State& state) {
   mpz_t base, exp, mod, result;
   mpz_init_set_str(base, NUM_SMALL, 10);
   mpz_init_set_str(exp, "65537", 10);
-  mpz_init_set_str(mod, NUM_SMALL_B, 10);
+  mpz_init_set_str(mod, NUM_SMALL_ODD, 10);  // Use odd modulus for fair comparison
   mpz_init(result);
   for (auto _ : state) {
     mpz_powm(result, base, exp, mod);

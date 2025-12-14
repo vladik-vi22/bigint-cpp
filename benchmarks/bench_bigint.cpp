@@ -210,6 +210,30 @@ static const std::string HUGE_1024_B =
     "98765432109876543210987654321098765432109876543210"
     "987654321098765432109876";
 
+// 1024-digit ODD number for Montgomery algorithm testing (ends in 7)
+static const std::string HUGE_1024_ODD =
+    "98765432109876543210987654321098765432109876543210"
+    "98765432109876543210987654321098765432109876543210"
+    "98765432109876543210987654321098765432109876543210"
+    "98765432109876543210987654321098765432109876543210"
+    "98765432109876543210987654321098765432109876543210"
+    "98765432109876543210987654321098765432109876543210"
+    "98765432109876543210987654321098765432109876543210"
+    "98765432109876543210987654321098765432109876543210"
+    "98765432109876543210987654321098765432109876543210"
+    "98765432109876543210987654321098765432109876543210"
+    "98765432109876543210987654321098765432109876543210"
+    "98765432109876543210987654321098765432109876543210"
+    "98765432109876543210987654321098765432109876543210"
+    "98765432109876543210987654321098765432109876543210"
+    "98765432109876543210987654321098765432109876543210"
+    "98765432109876543210987654321098765432109876543210"
+    "98765432109876543210987654321098765432109876543210"
+    "98765432109876543210987654321098765432109876543210"
+    "98765432109876543210987654321098765432109876543210"
+    "98765432109876543210987654321098765432109876543210"
+    "987654321098765432109877";
+
 static void BM_BigInt_Addition_Huge(benchmark::State& state) {
   BigInt a(HUGE_1024);
   BigInt b(HUGE_1024_B);
@@ -250,17 +274,29 @@ static void BM_BigInt_GCD_Huge(benchmark::State& state) {
 }
 BENCHMARK(BM_BigInt_GCD_Huge);
 
-static void BM_BigInt_PowMod_RSA(benchmark::State& state) {
-  // Simulate RSA encryption: m^e mod n with realistic sizes
+static void BM_BigInt_PowMod_RSA_Standard(benchmark::State& state) {
+  // RSA with EVEN modulus - forces standard square-and-multiply algorithm
   BigInt base(HUGE_1024);
-  BigInt exp("65537");  // Common RSA public exponent
-  BigInt mod(HUGE_1024_B);
+  BigInt exp("65537");  // Common RSA public exponent (17 bits)
+  BigInt mod(HUGE_1024_B);  // Even modulus (ends in 6)
   for (auto _ : state) {
     BigInt result = powmod(base, exp, mod);
     benchmark::DoNotOptimize(result);
   }
 }
-BENCHMARK(BM_BigInt_PowMod_RSA);
+BENCHMARK(BM_BigInt_PowMod_RSA_Standard);
+
+static void BM_BigInt_PowMod_RSA_Montgomery(benchmark::State& state) {
+  // RSA with ODD modulus - uses Montgomery multiplication algorithm
+  BigInt base(HUGE_1024);
+  BigInt exp("65537");  // Common RSA public exponent (17 bits)
+  BigInt mod(HUGE_1024_ODD);  // Odd modulus (ends in 7)
+  for (auto _ : state) {
+    BigInt result = powmod(base, exp, mod);
+    benchmark::DoNotOptimize(result);
+  }
+}
+BENCHMARK(BM_BigInt_PowMod_RSA_Montgomery);
 
 static void BM_BigInt_LeftShift_Huge(benchmark::State& state) {
   BigInt a(HUGE_1024);

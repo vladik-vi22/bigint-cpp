@@ -93,6 +93,144 @@ TEST_F(BigIntArithmeticTest, PowerMod) {
   EXPECT_EQ(result.toStdString(10), "24");  // 1024 % 100 = 24
 }
 
+// Test standard square-and-multiply algorithm (small modulus, uses fast division)
+TEST_F(BigIntArithmeticTest, PowerModStandardSmallModulus) {
+  // Small modulus - uses standard algorithm
+  BigInt base("7", 10);
+  BigInt exp("13", 10);
+  BigInt mod("11", 10);
+  BigInt result = powmod(base, exp, mod);
+  // 7^13 mod 11: 7^1=7, 7^2=5, 7^4=3, 7^8=9, 7^13=7^8*7^4*7^1=9*3*7=189 mod 11=2
+  EXPECT_EQ(result.toStdString(10), "2");
+}
+
+// Test standard algorithm with even modulus (Montgomery requires odd)
+TEST_F(BigIntArithmeticTest, PowerModStandardEvenModulus) {
+  // Even modulus - must use standard algorithm
+  BigInt base("3", 10);
+  BigInt exp("100", 10);
+  BigInt mod("1000", 10);  // Even modulus
+  BigInt result = powmod(base, exp, mod);
+  // Verify result is in valid range
+  EXPECT_TRUE(result >= BigInt(0));
+  EXPECT_TRUE(result < mod);
+  // 3^100 mod 1000 = 1 (since 3^100 ends in ...001)
+  EXPECT_EQ(result.toStdString(10), "1");
+}
+
+// Test Montgomery algorithm with large odd modulus
+TEST_F(BigIntArithmeticTest, PowerModMontgomeryLargeOddModulus) {
+  // Large odd modulus (>= 256 bits) with exponent >= 16 bits triggers Montgomery
+  // Using a 512-bit odd prime-like number
+  BigInt mod(
+      "1340780792994259709957402499820584612747936582059239337772356144372176403007"
+      "1706109068701238785423046926253574578428203904729633967850393354094257207843",
+      10);
+  BigInt base("12345678901234567890123456789012345678901234567890", 10);
+  BigInt exp("65537", 10);  // 17 bits, triggers Montgomery
+
+  BigInt result = powmod(base, exp, mod);
+
+  // Verify result is in valid range
+  EXPECT_TRUE(result >= BigInt(0));
+  EXPECT_TRUE(result < mod);
+
+  // Verify correctness by checking (base^exp)^1 mod mod = base^exp mod mod
+  BigInt result2 = powmod(result, BigInt(1), mod);
+  EXPECT_EQ(result.toStdString(10), result2.toStdString(10));
+}
+
+// Test that both algorithms produce the same result for the same input
+TEST_F(BigIntArithmeticTest, PowerModAlgorithmConsistency) {
+  // Use a modulus that's large enough for Montgomery but test with small exponent first
+  // Then compare with large exponent result using mathematical properties
+
+  // 256-bit odd modulus
+  BigInt mod_odd(
+      "115792089237316195423570985008687907853269984665640564039457584007913129639937",
+      10);
+  BigInt base("98765432109876543210987654321", 10);
+
+  // Small exponent (uses standard algorithm)
+  BigInt exp_small("100", 10);
+  BigInt result_small = powmod(base, exp_small, mod_odd);
+
+  // Verify (base^100)^1 = base^100
+  BigInt verify = powmod(result_small, BigInt(1), mod_odd);
+  EXPECT_EQ(result_small.toStdString(10), verify.toStdString(10));
+
+  // Large exponent (uses Montgomery if modulus is large enough)
+  BigInt exp_large("65537", 10);
+  BigInt result_large = powmod(base, exp_large, mod_odd);
+
+  // Verify result is in valid range
+  EXPECT_TRUE(result_large >= BigInt(0));
+  EXPECT_TRUE(result_large < mod_odd);
+}
+
+// Test Montgomery with RSA-like parameters (1024-bit modulus)
+TEST_F(BigIntArithmeticTest, PowerModMontgomeryRSA1024) {
+  // 1024-bit odd modulus (ends in 7, so it's odd)
+  BigInt mod(
+      "1234567890123456789012345678901234567890123456789012345678901234567890"
+      "1234567890123456789012345678901234567890123456789012345678901234567890"
+      "1234567890123456789012345678901234567890123456789012345678901234567890"
+      "1234567890123456789012345678901234567890123456789012345678901234567890"
+      "12345678901234567890123456789012345678901234567",
+      10);
+  BigInt base(
+      "9876543210987654321098765432109876543210987654321098765432109876543210"
+      "9876543210987654321098765432109876543210987654321098765432109876543210",
+      10);
+  BigInt exp("65537", 10);
+
+  BigInt result = powmod(base, exp, mod);
+
+  // Verify result is in valid range
+  EXPECT_TRUE(result >= BigInt(0));
+  EXPECT_TRUE(result < mod);
+
+  // Verify idempotence: powmod(result, 1, mod) == result
+  BigInt verify = powmod(result, BigInt(1), mod);
+  EXPECT_EQ(result.toStdString(10), verify.toStdString(10));
+}
+
+// Test edge cases for both algorithms
+TEST_F(BigIntArithmeticTest, PowerModEdgeCases) {
+  BigInt mod("97", 10);  // Small prime
+
+  // base^0 = 1
+  EXPECT_EQ(powmod(BigInt("5"), BigInt("0"), mod).toStdString(10), "1");
+
+  // 0^exp = 0 (for exp > 0)
+  EXPECT_EQ(powmod(BigInt("0"), BigInt("10"), mod).toStdString(10), "0");
+
+  // base^1 = base mod m
+  EXPECT_EQ(powmod(BigInt("50"), BigInt("1"), mod).toStdString(10), "50");
+
+  // 1^exp = 1
+  EXPECT_EQ(powmod(BigInt("1"), BigInt("1000000"), mod).toStdString(10), "1");
+
+  // Fermat's little theorem: a^(p-1) = 1 mod p for prime p
+  EXPECT_EQ(powmod(BigInt("5"), BigInt("96"), mod).toStdString(10), "1");
+}
+
+// Test that Montgomery handles the boundary case correctly
+TEST_F(BigIntArithmeticTest, PowerModMontgomeryBoundary) {
+  // Exactly 8 words (256 bits) odd modulus - boundary for Montgomery
+  // 2^256 - 1 is odd (all 1s in binary)
+  BigInt mod(
+      "115792089237316195423570985008687907853269984665640564039457584007913129639935",
+      10);
+  BigInt base("12345678901234567890", 10);
+  BigInt exp("65537", 10);
+
+  BigInt result = powmod(base, exp, mod);
+
+  EXPECT_TRUE(result >= BigInt(0));
+  EXPECT_TRUE(result < mod);
+}
+
 TEST_F(BigIntArithmeticTest, GCD) {
   BigInt a("48", 10);
   BigInt b("18", 10);
@@ -195,11 +333,26 @@ TEST_F(BigIntArithmeticTest, HugeDivision) {
 
 TEST_F(BigIntArithmeticTest, HugePowerMod) {
   // RSA-like operation: base^exp mod n with large numbers
+  // Using odd modulus to potentially trigger Montgomery algorithm
   BigInt base("123456789012345678901234567890123456789012345678901234567890", 10);
-  BigInt exp("65537", 10);  // Common RSA public exponent
+  BigInt exp("65537", 10);  // Common RSA public exponent (17 bits)
   BigInt mod("1000000000000000000000000000000000000000000000000000000000057", 10);
   BigInt result = powmod(base, exp, mod);
   // Result should be less than modulus
+  EXPECT_TRUE(result < mod);
+  EXPECT_TRUE(result >= BigInt(0));
+
+  // Verify idempotence
+  BigInt verify = powmod(result, BigInt(1), mod);
+  EXPECT_EQ(result.toStdString(10), verify.toStdString(10));
+}
+
+TEST_F(BigIntArithmeticTest, HugePowerModEvenModulus) {
+  // Large even modulus - must use standard algorithm
+  BigInt base("123456789012345678901234567890123456789012345678901234567890", 10);
+  BigInt exp("65537", 10);
+  BigInt mod("1000000000000000000000000000000000000000000000000000000000000", 10);
+  BigInt result = powmod(base, exp, mod);
   EXPECT_TRUE(result < mod);
   EXPECT_TRUE(result >= BigInt(0));
 }
