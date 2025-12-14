@@ -76,10 +76,7 @@ jobs:
       - name: Configure CMake (Windows)
         if: matrix.os == 'windows-latest'
         run: |
-          cmake -B build -G "${{ matrix.cmake_generator }}" `
-            -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} `
-            -DBIGINT_BUILD_TESTS=ON `
-            -DBIGINT_BUILD_BENCHMARKS=ON
+          cmake -B build -G "${{ matrix.cmake_generator }}" -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} -DBIGINT_BUILD_TESTS=ON -DBIGINT_BUILD_BENCHMARKS=ON
 
       - name: Configure CMake (Unix)
         if: matrix.os != 'windows-latest'
@@ -87,16 +84,53 @@ jobs:
           CC: ${{ matrix.cc || 'clang' }}
           CXX: ${{ matrix.cxx || 'clang++' }}
         run: |
-          cmake -B build `
-            -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} `
-            -DBIGINT_BUILD_TESTS=ON `
-            -DBIGINT_BUILD_BENCHMARKS=ON
+          cmake -B build -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} -DBIGINT_BUILD_TESTS=ON -DBIGINT_BUILD_BENCHMARKS=ON
 
       - name: Build
         run: cmake --build build --config ${{ matrix.build_type }} --parallel
 
       - name: Run Tests
         run: ctest --test-dir build -C ${{ matrix.build_type }} --output-on-failure --parallel
+
+  sanitizers:
+    name: ${{ matrix.sanitizer }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - sanitizer: AddressSanitizer
+            cmake_flags: "-DCMAKE_CXX_FLAGS=-fsanitize=address -fno-omit-frame-pointer"
+          - sanitizer: UndefinedBehaviorSanitizer
+            cmake_flags: "-DCMAKE_CXX_FLAGS=-fsanitize=undefined"
+          - sanitizer: LeakSanitizer
+            cmake_flags: "-DCMAKE_CXX_FLAGS=-fsanitize=leak"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Clang 17
+        run: |
+          wget https://apt.llvm.org/llvm.sh
+          chmod +x llvm.sh
+          sudo ./llvm.sh 17
+
+      - name: Configure CMake
+        env:
+          CC: clang-17
+          CXX: clang++-17
+        run: |
+          cmake -B build -DCMAKE_BUILD_TYPE=Debug -DBIGINT_BUILD_TESTS=ON ${{ matrix.cmake_flags }}
+
+      - name: Build
+        run: cmake --build build --parallel
+
+      - name: Run Tests
+        env:
+          ASAN_OPTIONS: detect_leaks=1:abort_on_error=1
+          UBSAN_OPTIONS: print_stacktrace=1:halt_on_error=1
+        run: ctest --test-dir build --output-on-failure --parallel
 
   clang-format:
     name: Code Formatting
@@ -114,8 +148,7 @@ jobs:
 
       - name: Check formatting
         run: |
-          find src include tests benchmarks -name '*.cpp' -o -name '*.hpp' | \
-            xargs clang-format-17 --dry-run --Werror
+          find src include tests benchmarks -name '*.cpp' -o -name '*.hpp' | xargs clang-format-17 --dry-run --Werror
 
   clang-tidy:
     name: Static Analysis
@@ -136,10 +169,7 @@ jobs:
           CC: clang-17
           CXX: clang++-17
         run: |
-          cmake -B build `
-            -DCMAKE_BUILD_TYPE=Debug `
-            -DCMAKE_EXPORT_COMPILE_COMMANDS=ON `
-            -DBIGINT_BUILD_TESTS=ON
+          cmake -B build -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DBIGINT_BUILD_TESTS=ON
 
       - name: Run clang-tidy
         run: |
