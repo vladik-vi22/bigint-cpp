@@ -109,13 +109,13 @@ static void BM_Boost_Divide(benchmark::State& state) {
 BENCHMARK(BM_Boost_Divide);
 
 // ============================================================================
-// Modular Exponentiation Comparison (powmod)
+// Modular Exponentiation Comparison (powmod) - RSA Public Key (small exponent)
 // ============================================================================
 
 static void BM_BigInt_PowMod(benchmark::State& state) {
   BigInt base(NUM_SMALL);
-  BigInt exp("65537");  // RSA public exponent
-  BigInt mod(NUM_SMALL_B);
+  BigInt exp("65537");  // RSA public exponent (17 bits)
+  BigInt mod(NUM_SMALL_B);  // Even modulus - uses standard algorithm
   for (auto _ : state) {
     BigInt result = powmod(base, exp, mod);
     benchmark::DoNotOptimize(result);
@@ -133,6 +133,36 @@ static void BM_Boost_PowMod(benchmark::State& state) {
   }
 }
 BENCHMARK(BM_Boost_PowMod);
+
+// ============================================================================
+// Modular Exponentiation - RSA Private Key Simulation (large exponent)
+// ============================================================================
+
+// Odd modulus for Montgomery algorithm testing
+static const std::string NUM_SMALL_ODD =
+    "12345678901234567890123456789012345678901234567891";
+
+static void BM_BigInt_PowMod_LargeExp(benchmark::State& state) {
+  BigInt base(NUM_SMALL);
+  BigInt exp(NUM_SMALL);  // Large exponent (~200 bits) - simulates private key
+  BigInt mod(NUM_SMALL_ODD);  // Odd modulus - uses Montgomery
+  for (auto _ : state) {
+    BigInt result = powmod(base, exp, mod);
+    benchmark::DoNotOptimize(result);
+  }
+}
+BENCHMARK(BM_BigInt_PowMod_LargeExp);
+
+static void BM_Boost_PowMod_LargeExp(benchmark::State& state) {
+  cpp_int base(NUM_SMALL);
+  cpp_int exp(NUM_SMALL);  // Large exponent (~200 bits)
+  cpp_int mod(NUM_SMALL_ODD);
+  for (auto _ : state) {
+    cpp_int result = powm(base, exp, mod);
+    benchmark::DoNotOptimize(result);
+  }
+}
+BENCHMARK(BM_Boost_PowMod_LargeExp);
 
 // ============================================================================
 // GCD Comparison

@@ -103,11 +103,12 @@ cmake --build build --config Release
 
 | Operation | bigint-cpp | Boost | Ratio |
 |-----------|------------|-------|-------|
-| Add | 76 ns | 60 ns | ~1.3x slower |
-| Multiply | 112 ns | 91 ns | ~1.2x slower |
-| Divide | 526 ns | 1.1 μs | **~2x faster!** |
-| PowMod | 9.4 μs | 8.8 μs | ~1x (equal) |
-| GCD | 1.3 μs | 477 ns | ~2.7x slower |
+| Add | 79 ns | 53 ns | ~1.5x slower |
+| Multiply | 124 ns | 102 ns | ~1.2x slower |
+| Divide | 518 ns | 1.1 μs | **~2x faster!** |
+| PowMod (e=65537) | 9.6 μs | 9.0 μs | ~1x (equal) |
+| PowMod (large exp) | 76 μs | 7.0 μs | ~11x slower |
+| GCD | 1.0 μs | 477 ns | ~2x slower |
 
 ### vs GMP (the gold standard)
 
@@ -120,24 +121,25 @@ cmake --build build --config Release
 
 | Operation | bigint-cpp | GMP | Ratio |
 |-----------|------------|-----|-------|
-| Add | 85 ns | 10 ns | ~9x slower |
-| Multiply | 123 ns | 17 ns | ~7x slower |
-| Divide | 534 ns | 129 ns | ~4x slower |
-| PowMod | 9.4 μs | 493 ns | ~19x slower |
-| GCD | 1.2 μs | 157 ns | ~8x slower |
+| Add | 76 ns | 10 ns | ~8x slower |
+| Multiply | 114 ns | 22 ns | ~5x slower |
+| Divide | 549 ns | 132 ns | ~4x slower |
+| PowMod (e=65537) | 9.6 μs | 429 ns | ~22x slower |
+| GCD | 1.1 μs | 157 ns | ~7x slower |
 
-*Tested with ~600-bit numbers on MSVC 19.50, Release build.*
+*Tested with ~200-600 bit numbers on MSVC 19.50, Release build.*
 
-**Takeaway:** Division uses Knuth's Algorithm D - faster than Boost! GCD benefits from fast division. PowMod could benefit from Montgomery multiplication. GMP uses hand-tuned assembly - we're pure C++.
+**Takeaway:** Division uses Knuth's Algorithm D - faster than Boost! For small exponents (RSA public key e=65537), we match Boost. For large exponents (RSA private key), Boost's Montgomery is much faster. GMP uses hand-tuned assembly - we're pure C++.
 
 ## Internals
 
 - `std::vector<uint32_t>` storage, little-endian, base 2³²
 - Schoolbook O(n²) multiplication for small numbers, Karatsuba for large (threshold: 32 words)
 - **Knuth's Algorithm D** for division (TAOCP Vol 2, Section 4.3.1)
-- Euclidean GCD (leverages fast division), square-and-multiply for powmod
+- Euclidean GCD (leverages fast division)
+- PowMod: square-and-multiply with Montgomery multiplication for large odd moduli
 - Miller-Rabin primality testing with deterministic witnesses for small numbers
-- 122 unit tests, Google Benchmark suite included
+- 130 unit tests, Google Benchmark suite included
 
 ## License
 

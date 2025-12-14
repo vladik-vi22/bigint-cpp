@@ -234,6 +234,23 @@ static const std::string HUGE_1024_ODD =
     "98765432109876543210987654321098765432109876543210"
     "987654321098765432109877";
 
+// 256-digit numbers (~850 bits) for private key simulation benchmarks
+// HUGE_256_ODD ends in 9 (odd) - will use Montgomery
+static const std::string HUGE_256_ODD =
+    "12345678901234567890123456789012345678901234567890"
+    "12345678901234567890123456789012345678901234567890"
+    "12345678901234567890123456789012345678901234567890"
+    "12345678901234567890123456789012345678901234567890"
+    "12345678901234567890123456789012345678901234567899";
+
+// HUGE_256_EVEN ends in 0 (even) - will use standard algorithm
+static const std::string HUGE_256_EVEN =
+    "98765432109876543210987654321098765432109876543210"
+    "98765432109876543210987654321098765432109876543210"
+    "98765432109876543210987654321098765432109876543210"
+    "98765432109876543210987654321098765432109876543210"
+    "98765432109876543210987654321098765432109876543210";
+
 static void BM_BigInt_Addition_Huge(benchmark::State& state) {
   BigInt a(HUGE_1024);
   BigInt b(HUGE_1024_B);
@@ -297,6 +314,30 @@ static void BM_BigInt_PowMod_RSA_Montgomery(benchmark::State& state) {
   }
 }
 BENCHMARK(BM_BigInt_PowMod_RSA_Montgomery);
+
+// RSA private key simulation - large exponent where Montgomery should shine
+// Uses 256-digit (~850 bit) numbers - large enough to trigger Montgomery
+static void BM_BigInt_PowMod_PrivateKey_Standard(benchmark::State& state) {
+  BigInt base(HUGE_256_ODD);
+  BigInt exp(HUGE_256_ODD);  // Large exponent (~850 bits) - simulates private key
+  BigInt mod(HUGE_256_EVEN);  // Even modulus - forces standard algorithm
+  for (auto _ : state) {
+    BigInt result = powmod(base, exp, mod);
+    benchmark::DoNotOptimize(result);
+  }
+}
+BENCHMARK(BM_BigInt_PowMod_PrivateKey_Standard);
+
+static void BM_BigInt_PowMod_PrivateKey_Montgomery(benchmark::State& state) {
+  BigInt base(HUGE_256_EVEN);
+  BigInt exp(HUGE_256_ODD);  // Large exponent (~850 bits) - simulates private key
+  BigInt mod(HUGE_256_ODD);  // Odd modulus - uses Montgomery
+  for (auto _ : state) {
+    BigInt result = powmod(base, exp, mod);
+    benchmark::DoNotOptimize(result);
+  }
+}
+BENCHMARK(BM_BigInt_PowMod_PrivateKey_Montgomery);
 
 static void BM_BigInt_LeftShift_Huge(benchmark::State& state) {
   BigInt a(HUGE_1024);

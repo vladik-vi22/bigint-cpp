@@ -897,19 +897,105 @@ BigInt powmod(const BigInt& base, const BigInt& exponent, const BigInt& divisor)
     throw std::domain_error("Modular exponentiation with zero divisor");
   }
 
-  BigInt result(1);
-  result.digits_.reserve(divisor.digits_.size());
-  const size_t bit_len = exponent.bitLength();
+  // Handle edge cases
+  if (exponent == 0) {
+    return BigInt(1);
+  }
+  if (base == 0) {
+    return BigInt(0);
+  }
 
+  // Montgomery multiplication requires odd modulus and benefits from larger numbers.
+  // For small moduli or even moduli, use standard square-and-multiply with fast division.
+  // Threshold: Montgomery is beneficial when modulus has >= 8 words (256 bits) AND
+  // exponent has >= 16 bits (enough operations to amortize setup cost).
+  // Note: RSA public exponent 65537 is 17 bits, so we use 16 as threshold.
+  const bool use_montgomery = (divisor.digits_[0] & 1) && divisor.digits_.size() >= 8 &&
+                              exponent.bitLength() >= 16;
+
+  if (!use_montgomery) {
+    BigInt result(1);
+    BigInt b = base % divisor;
+    const size_t bit_len = exponent.bitLength();
+
+    for (size_t i = 0; i < bit_len; ++i) {
+      size_t bit_idx = bit_len - 1 - i;
+      result = (result * result) % divisor;
+      if (exponent.digits_[bit_idx >> 5] & (1 << (bit_idx & 31))) {
+        result = (result * b) % divisor;
+      }
+    }
+    return result;
+  }
+
+  // Montgomery exponentiation for odd modulus
+  const size_t k = divisor.digits_.size();
+
+  // Compute -n^(-1) mod 2^32 using Newton's method
+  uint32_t n_prime = 1;
+  for (int i = 0; i < 5; ++i) {
+    n_prime = n_prime * (2 - divisor.digits_[0] * n_prime);
+  }
+  n_prime = static_cast<uint32_t>(-static_cast<int32_t>(n_prime));
+
+  // Lambda for Montgomery reduction: T * R^(-1) mod N
+  auto montReduce = [&](BigInt t) -> BigInt {
+    t.digits_.resize(2 * k + 1, 0);
+
+    for (size_t i = 0; i < k; ++i) {
+      uint32_t m = t.digits_[i] * n_prime;
+      uint64_t carry = 0;
+      for (size_t j = 0; j < k; ++j) {
+        uint64_t product =
+            static_cast<uint64_t>(m) * divisor.digits_[j] + t.digits_[i + j] + carry;
+        t.digits_[i + j] = static_cast<uint32_t>(product);
+        carry = product >> 32;
+      }
+      for (size_t j = i + k; carry && j < t.digits_.size(); ++j) {
+        uint64_t sum = static_cast<uint64_t>(t.digits_[j]) + carry;
+        t.digits_[j] = static_cast<uint32_t>(sum);
+        carry = sum >> 32;
+      }
+    }
+
+    // Shift right by k words
+    BigInt result;
+    result.digits_.assign(t.digits_.begin() + k, t.digits_.end());
+    result.deleteZeroHighOrderDigit();
+
+    if (result >= divisor) {
+      result -= divisor;
+    }
+    return result;
+  };
+
+  // Lambda for Montgomery multiplication: a * b * R^(-1) mod N
+  auto montMul = [&](const BigInt& a, const BigInt& b) -> BigInt { return montReduce(a * b); };
+
+  // Compute R^2 mod N for converting to Montgomery form
+  BigInt r_squared(1);
+  r_squared <<= (64 * k);
+  r_squared = r_squared % divisor;
+
+  // Convert base to Montgomery form
+  BigInt base_mod = base % divisor;
+  BigInt base_mont = montReduce(base_mod * r_squared);
+
+  // result_mont = R mod N (Montgomery form of 1)
+  BigInt result_mont = montReduce(r_squared);
+
+  // Square-and-multiply in Montgomery form
+  const size_t bit_len = exponent.bitLength();
   for (size_t i = 0; i < bit_len; ++i) {
     size_t bit_idx = bit_len - 1 - i;
-    result = (result * result) % divisor;
+    result_mont = montMul(result_mont, result_mont);
     if (exponent.digits_[bit_idx >> 5] & (1 << (bit_idx & 31))) {
-      result = (result * base) % divisor;
+      result_mont = montMul(result_mont, base_mont);
     }
   }
 
-  return result;
+  // Convert back from Montgomery form
+  return montReduce(result_mont);
 }
 
 BigInt inversemod(BigInt value, const BigInt& modulus) {
