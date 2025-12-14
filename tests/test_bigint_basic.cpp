@@ -15,7 +15,7 @@ class BigIntBasicTest : public ::testing::Test {
 TEST_F(BigIntBasicTest, DefaultConstructor) {
   BigInt num;
   EXPECT_EQ(num.toStdString(10), "0");
-  EXPECT_TRUE(num.isZero());
+  EXPECT_TRUE(num == 0);
 }
 
 // ============================================================================
@@ -66,18 +66,18 @@ TEST_F(BigIntBasicTest, Uint64Constructor) {
 
 TEST_F(BigIntBasicTest, NegativeNumber) {
   BigInt num("-12345", 10);
-  EXPECT_TRUE(num.isNegative());
-  EXPECT_FALSE(num.isPositive());
+  EXPECT_TRUE(num < 0);
+  EXPECT_FALSE(num > 0);
 }
 
 TEST_F(BigIntBasicTest, IsEvenOdd) {
   BigInt even("100", 10);
   BigInt odd("101", 10);
 
-  EXPECT_TRUE(even.isEven());
-  EXPECT_FALSE(even.isOdd());
-  EXPECT_TRUE(odd.isOdd());
-  EXPECT_FALSE(odd.isEven());
+  EXPECT_TRUE(even % 2 == 0);
+  EXPECT_FALSE(even % 2 != 0);
+  EXPECT_TRUE(odd % 2 != 0);
+  EXPECT_FALSE(odd % 2 == 0);
 }
 
 TEST_F(BigIntBasicTest, BitLength) {
@@ -86,38 +86,38 @@ TEST_F(BigIntBasicTest, BitLength) {
 }
 
 // ============================================================================
-// isZero() Tests
+// Zero Comparison Tests
 // ============================================================================
 
 TEST_F(BigIntBasicTest, IsZeroDefault) {
   BigInt num;
-  EXPECT_TRUE(num.isZero());
+  EXPECT_TRUE(num == 0);
 }
 
 TEST_F(BigIntBasicTest, IsZeroFromString) {
   BigInt zero("0", 10);
-  EXPECT_TRUE(zero.isZero());
+  EXPECT_TRUE(zero == 0);
 
   BigInt nonZero("1", 10);
-  EXPECT_FALSE(nonZero.isZero());
+  EXPECT_FALSE(nonZero == 0);
 }
 
 TEST_F(BigIntBasicTest, IsZeroAfterOperations) {
   BigInt a("100", 10);
   BigInt b("100", 10);
   BigInt result = a - b;
-  EXPECT_TRUE(result.isZero());
+  EXPECT_TRUE(result == 0);
 
   BigInt c("0", 10);
   BigInt d("5", 10);
   BigInt product = c * d;
-  EXPECT_TRUE(product.isZero());
+  EXPECT_TRUE(product == 0);
 }
 
 TEST_F(BigIntBasicTest, IsZeroNegativeZero) {
   // Ensure -0 is treated as zero
   BigInt negZero("-0", 10);
-  EXPECT_TRUE(negZero.isZero());
+  EXPECT_TRUE(negZero == 0);
 }
 
 TEST_F(BigIntBasicTest, NegativeZeroEqualsPositiveZero) {
@@ -156,8 +156,8 @@ TEST_F(BigIntBasicTest, ZeroOperations) {
   EXPECT_EQ((num - zero).toStdString(10), "12345");
 
   // Multiplication with zero
-  EXPECT_TRUE((num * zero).isZero());
-  EXPECT_TRUE((zero * num).isZero());
+  EXPECT_TRUE((num * zero) == 0);
+  EXPECT_TRUE((zero * num) == 0);
 }
 
 TEST_F(BigIntBasicTest, OneOperations) {
@@ -177,13 +177,13 @@ TEST_F(BigIntBasicTest, SignHandling) {
   BigInt neg("-100", 10);
 
   // Positive * Negative = Negative
-  EXPECT_TRUE((pos * neg).isNegative());
+  EXPECT_TRUE((pos * neg) < 0);
 
   // Negative * Negative = Positive
-  EXPECT_TRUE((neg * neg).isPositive());
+  EXPECT_TRUE((neg * neg) > 0);
 
   // Negative + Negative = Negative
-  EXPECT_TRUE((neg + neg).isNegative());
+  EXPECT_TRUE((neg + neg) < 0);
 }
 
 TEST_F(BigIntBasicTest, BoundaryValues) {
@@ -340,7 +340,7 @@ TEST_F(BigIntBasicTest, SpanConstructorLeadingZeros) {
   uint32_t with_zeros[] = {0x00000000, 0x00000000, 0x12345678};
   BigInt from_zeros(std::span<const uint32_t>{with_zeros});
   EXPECT_EQ(from_zeros.toStdString(16), "12345678");
-  EXPECT_EQ(from_zeros.digitCount(), 1);  // Only one digit after normalization
+  EXPECT_EQ(from_zeros.bitLength(), 29);  // 0x12345678 needs 29 bits
 }
 
 TEST_F(BigIntBasicTest, ByteVectorCastOperator) {

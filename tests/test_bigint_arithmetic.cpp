@@ -262,7 +262,7 @@ TEST_F(BigIntArithmeticTest, AbsoluteValue) {
   BigInt negative("-12345", 10);
   EXPECT_EQ(abs(positive).toStdString(10), "12345");
   EXPECT_EQ(abs(negative).toStdString(10), "12345");
-  EXPECT_TRUE(abs(negative).isPositive());
+  EXPECT_TRUE(abs(negative) > 0);
 }
 
 TEST_F(BigIntArithmeticTest, IsCoprime) {
@@ -432,7 +432,7 @@ TEST_F(BigIntArithmeticTest, RandomBits) {
   for (size_t bits : {32, 64, 128, 256}) {
     BigInt r = BigInt::randomBits(bits);
     EXPECT_EQ(r.bitLength(), bits);
-    EXPECT_TRUE(r.isPositive());
+    EXPECT_TRUE(r > 0);
   }
 
   // Edge case: 1 bit
@@ -442,7 +442,7 @@ TEST_F(BigIntArithmeticTest, RandomBits) {
 
   // Edge case: 0 bits
   BigInt r0 = BigInt::randomBits(0);
-  EXPECT_TRUE(r0.isZero());
+  EXPECT_TRUE(r0 == 0);
 }
 
 TEST_F(BigIntArithmeticTest, RandomBelow) {
@@ -456,32 +456,32 @@ TEST_F(BigIntArithmeticTest, RandomBelow) {
   }
 
   // Edge cases
-  EXPECT_TRUE(BigInt::randomBelow(BigInt(1)).isZero());
-  EXPECT_TRUE(BigInt::randomBelow(BigInt(0)).isZero());
+  EXPECT_TRUE(BigInt::randomBelow(BigInt(1)) == 0);
+  EXPECT_TRUE(BigInt::randomBelow(BigInt(0)) == 0);
 }
 
-TEST_F(BigIntArithmeticTest, DigitCount) {
-  // Zero has 0 digits (empty vector)
-  EXPECT_EQ(BigInt().digitCount(), 0);
+TEST_F(BigIntArithmeticTest, BitLengthVariousSizes) {
+  // Zero has 1 bit
+  EXPECT_EQ(BigInt().bitLength(), 1);
 
   // Small numbers
-  EXPECT_EQ(BigInt(1).digitCount(), 1);
-  EXPECT_EQ(BigInt(UINT32_MAX).digitCount(), 1);
+  EXPECT_EQ(BigInt(1).bitLength(), 1);
+  EXPECT_EQ(BigInt(UINT32_MAX).bitLength(), 32);
 
-  // Numbers requiring 2 digits
+  // Numbers requiring more than 32 bits
   BigInt twoDigits = BigInt(1) << 32;
-  EXPECT_EQ(twoDigits.digitCount(), 2);
+  EXPECT_EQ(twoDigits.bitLength(), 33);
 
   // Large number
   BigInt large = BigInt(1) << 256;
-  EXPECT_EQ(large.digitCount(), 9);  // 257 bits = 9 x 32-bit words
+  EXPECT_EQ(large.bitLength(), 257);
 }
 
 TEST_F(BigIntArithmeticTest, RandomPrime16Bit) {
   BigInt prime = BigInt::randomPrime(16);
   EXPECT_EQ(prime.bitLength(), 16);
   EXPECT_TRUE(prime.isProbablePrime());
-  EXPECT_TRUE(prime.isOdd());
+  EXPECT_TRUE(prime % 2 != 0);  // isOdd
 }
 
 TEST_F(BigIntArithmeticTest, RandomPrimeSmall) {
@@ -562,12 +562,12 @@ TEST_F(BigIntArithmeticTest, SignedConversions) {
 TEST_F(BigIntArithmeticTest, NegativeOperations) {
   // Test int32_t constructor with negative value
   BigInt a(-100);  // Should be -100
-  EXPECT_TRUE(a.isNegative()) << "a should be negative";
+  EXPECT_TRUE(a < 0) << "a should be negative";
   EXPECT_EQ(static_cast<uint64_t>(a), 100) << "magnitude should be 100";
   EXPECT_EQ(a.toStdString(10), "-100") << "string should be -100";
 
   BigInt b(30);
-  EXPECT_TRUE(b.isPositive());
+  EXPECT_TRUE(b > 0);
   EXPECT_EQ(b.toStdString(10), "30");
 
   // Test negative + positive: -100 + 30 = -70
@@ -585,7 +585,7 @@ TEST_F(BigIntArithmeticTest, NegativeOperations) {
   // Test negative * negative = positive
   BigInt c(-30);
   BigInt prod2 = a * c;
-  EXPECT_TRUE(prod2.isPositive());
+  EXPECT_TRUE(prod2 > 0);
   EXPECT_EQ(prod2.toStdString(10), "3000");
 }
 
@@ -663,13 +663,13 @@ TEST_F(BigIntArithmeticTest, EdgeCaseIncrementDecrement) {
   BigInt neg1(-1);
   ++neg1;
   EXPECT_EQ(neg1, BigInt(0));
-  EXPECT_TRUE(neg1.isZero());
+  EXPECT_TRUE(neg1 == 0);
 
   // Decrement from 0 to -1
   BigInt zero(0);
   --zero;
   EXPECT_EQ(zero, BigInt(-1));
-  EXPECT_TRUE(zero.isNegative());
+  EXPECT_TRUE(zero < 0);
 
   // Increment across 32-bit boundary
   BigInt boundary(UINT32_MAX);

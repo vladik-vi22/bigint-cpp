@@ -27,15 +27,15 @@ constexpr auto kSmallPrimes =
 
 /// Converts a decimal string to a binary string.
 /// Internal helper function for string constructor.
-std::string DecimalToBinaryString(std::string decimal_str) {
+std::string decimalToBinaryString(std::string decimal_str) {
   if (decimal_str == "0") {
     return "0";
   }
   std::string binary_str;
   std::vector<uint32_t> digits;
   std::vector<uint32_t> zero_arr;
-  uint32_t carry_next;
-  uint32_t carry_current;
+  uint32_t carry_next = 0;
+  uint32_t carry_current = 0;
 
   while (decimal_str.length() % kDecimalCellSize) {
     decimal_str.insert(0, 1, '0');
@@ -114,7 +114,7 @@ BigInt::BigInt(std::string str, const uint8_t base) {
   }
 
   if (base == kBaseDecimal) {
-    str = DecimalToBinaryString(str);
+    str = decimalToBinaryString(str);
   }
   while (str.length() % cell_size) {
     str.insert(0, 1, '0');
@@ -184,19 +184,16 @@ BigInt::BigInt(std::span<const uint8_t> data, const bool is_positive_) {
   size_t i = data.size();
   while (i >= 4) {
     i -= 4;
-    digits_.emplace_back(static_cast<uint32_t>(data[i + 3]) |
-                         (static_cast<uint32_t>(data[i + 2]) << 8) |
-                         (static_cast<uint32_t>(data[i + 1]) << 16) |
-                         (static_cast<uint32_t>(data[i]) << 24));
+    digits_.emplace_back(
+        static_cast<uint32_t>(data[i + 3]) | (static_cast<uint32_t>(data[i + 2]) << 8) |
+        (static_cast<uint32_t>(data[i + 1]) << 16) | (static_cast<uint32_t>(data[i]) << 24));
   }
   // Handle remaining bytes
   if (i == 3) {
-    digits_.emplace_back(static_cast<uint32_t>(data[2]) |
-                         (static_cast<uint32_t>(data[1]) << 8) |
+    digits_.emplace_back(static_cast<uint32_t>(data[2]) | (static_cast<uint32_t>(data[1]) << 8) |
                          (static_cast<uint32_t>(data[0]) << 16));
   } else if (i == 2) {
-    digits_.emplace_back(static_cast<uint32_t>(data[1]) |
-                         (static_cast<uint32_t>(data[0]) << 8));
+    digits_.emplace_back(static_cast<uint32_t>(data[1]) | (static_cast<uint32_t>(data[0]) << 8));
   } else if (i == 1) {
     digits_.emplace_back(static_cast<uint32_t>(data[0]));
   }
@@ -204,24 +201,22 @@ BigInt::BigInt(std::span<const uint8_t> data, const bool is_positive_) {
   positive_ = is_positive_;
 }
 
-BigInt::BigInt(const uint64_t value, const bool is_positive_) : positive_(is_positive_) {
+void BigInt::initFromUnsigned(const uint64_t value, const bool is_positive) {
+  positive_ = is_positive;
   digits_.reserve(2);
   digits_.emplace_back(static_cast<uint32_t>(value & UINT32_MAX));
   digits_.emplace_back(static_cast<uint32_t>(value >> 32));
+  deleteZeroHighOrderDigit();
 }
 
-BigInt::BigInt(const uint32_t value, const bool is_positive_)
-    : positive_(is_positive_), digits_{value} {}
-
-BigInt::BigInt(const int64_t value) : positive_(value >= 0) {
-  const auto abs_value = static_cast<uint64_t>(std::abs(value));
+void BigInt::initFromSigned(const int64_t value) {
+  positive_ = value >= 0;
+  const auto abs_value = static_cast<uint64_t>(value >= 0 ? value : -value);
   digits_.reserve(2);
   digits_.emplace_back(static_cast<uint32_t>(abs_value & UINT32_MAX));
   digits_.emplace_back(static_cast<uint32_t>(abs_value >> 32));
+  deleteZeroHighOrderDigit();
 }
-
-BigInt::BigInt(const int32_t value)
-    : positive_(value >= 0), digits_{static_cast<uint32_t>(std::abs(value))} {}
 
 BigInt& BigInt::operator=(const BigInt& other) {
   if (this != &other) {
@@ -290,10 +285,10 @@ BigInt BigInt::operator+(const BigInt& addend) const {
 
 BigInt& BigInt::operator+=(const BigInt& addend) {
   // Handle zero cases
-  if (addend.isZero()) {
+  if (addend == 0) {
     return *this;
   }
-  if (isZero()) {
+  if (*this == 0) {
     *this = addend;
     return *this;
   }
@@ -378,7 +373,7 @@ BigInt& BigInt::operator++() {
       if (digits_[i] > 0) {
         --digits_[i];
         deleteZeroHighOrderDigit();
-        if (isZero()) {
+        if (*this == 0) {
           positive_ = true;
         }
         return *this;
@@ -455,7 +450,7 @@ BigInt BigInt::operator-(const BigInt& subtrahend) const {
 }
 
 BigInt& BigInt::operator-=(const BigInt& subtrahend) {
-  if (subtrahend.isZero()) {
+  if (subtrahend == 0) {
     return *this;
   }
   BigInt negated = subtrahend;
@@ -465,7 +460,7 @@ BigInt& BigInt::operator-=(const BigInt& subtrahend) {
 
 BigInt& BigInt::operator--() {
   if (positive_) {
-    if (digits_.empty() || isZero()) {
+    if (digits_.empty() || *this == 0) {
       digits_.clear();
       digits_.push_back(1);
       positive_ = false;
@@ -535,7 +530,7 @@ BigInt& BigInt::operator*=(uint32_t multiplier) {
 }
 
 BigInt BigInt::operator*(const BigInt& multiplier) const {
-  if (isZero() || multiplier.isZero()) {
+  if (*this == 0 || multiplier == 0) {
     return BigInt();
   }
 
@@ -558,7 +553,7 @@ BigInt& BigInt::operator*=(const BigInt& multiplier) {
 }
 
 std::pair<BigInt, BigInt> BigInt::DivMod(const BigInt& divisor) const {
-  if (divisor.isZero()) {
+  if (divisor == 0) {
     throw std::domain_error("Division by zero");
   }
 
@@ -574,7 +569,7 @@ std::pair<BigInt, BigInt> BigInt::DivMod(const BigInt& divisor) const {
   if (remainder < abs_divisor) {
     // |dividend| < |divisor|, so quotient = 0
     // For negative dividend with positive divisor, we need to adjust
-    if (!positive_ && !remainder.isZero()) {
+    if (!positive_ && remainder != 0) {
       // -a = -1 * b + (b - a) when 0 < a < b
       quotient = BigInt(-1);
       remainder = abs_divisor - remainder;
@@ -617,10 +612,10 @@ std::pair<BigInt, BigInt> BigInt::DivMod(const BigInt& divisor) const {
 
   if (!positive_) {
     // Negative dividend: -|dividend| = -quotient * |divisor| - remainder
-    // If remainder != 0, we need: -|dividend| = (-quotient - 1) * |divisor| + (|divisor| - remainder)
-    // But for truncated division (C++ standard), remainder has same sign as dividend
-    // So: quotient = -quotient, remainder = -remainder
-    if (!remainder.isZero()) {
+    // If remainder != 0, we need: -|dividend| = (-quotient - 1) * |divisor| + (|divisor| -
+    // remainder) But for truncated division (C++ standard), remainder has same sign as dividend So:
+    // quotient = -quotient, remainder = -remainder
+    if (remainder != 0) {
       remainder.positive_ = false;
     }
     quotient.positive_ = false;
@@ -632,7 +627,7 @@ std::pair<BigInt, BigInt> BigInt::DivMod(const BigInt& divisor) const {
   }
 
   // Handle zero quotient sign
-  if (quotient.isZero()) {
+  if (quotient == 0) {
     quotient.positive_ = true;
   }
 
@@ -656,19 +651,20 @@ uint32_t BigInt::operator%(const uint32_t divisor) const {
   if (divisor == 0) {
     throw std::domain_error("Division by zero");
   }
-  if (digits_.empty() || isZero()) {
+  // Direct zero check to avoid template recursion
+  if (digits_.empty() || (digits_.size() == 1 && digits_[0] == 0)) {
     return 0;
   }
 
   // Horner's method: ((d[n-1] * B + d[n-2]) * B + ...) mod divisor
-  // where B = 2^32. Since divisor is 32-bit, remainder fits in 64-bit during computation.
-  const uint64_t base_mod = (static_cast<uint64_t>(1) << 32) % divisor;  // 2^32 mod divisor
+  // where B = 2^32. We use the property that (a*B + b) mod m = ((a mod m)*B + b) mod m
+  // Since remainder < divisor < 2^32 and B = 2^32, remainder*B fits in 64 bits.
+  const uint64_t base = static_cast<uint64_t>(1) << 32;
   uint64_t remainder = 0;
 
   for (auto it = digits_.crbegin(); it != digits_.crend(); ++it) {
-    // remainder = (remainder * 2^32 + digit) mod divisor
-    // = (remainder * base_mod + digit) mod divisor (since remainder < divisor after each step)
-    remainder = (remainder * base_mod + *it) % divisor;
+    // remainder is already < divisor, so remainder * base fits in 64 bits
+    remainder = (remainder * base + *it) % divisor;
   }
 
   return static_cast<uint32_t>(remainder);
@@ -694,12 +690,12 @@ BigInt pow(const BigInt& base, const BigInt& exponent) {
     result *= result;
   }
 
-  if (exponent.isOdd()) {
+  if (exponent % 2 != 0) {
     result *= base;
   }
 
   if (!base.positive_) {
-    result.positive_ = exponent.isEven();
+    result.positive_ = (exponent % 2 == 0);
   }
 
   return result;
@@ -717,15 +713,15 @@ size_t log2(const BigInt& value) noexcept {
 //   const uint32_t bit_len = exponent.bitLength();
 //   for (size_t bit_idx = 0; bit_idx < bit_len; ++bit_idx) {
 //     if (exponent.digits_[bit_idx >> 5] & (1 << (bit_idx & 31))) {
-//       power = BarrettReduction(power * base, divisor, mu);
+//       power = barrettReduction(power * base, divisor, mu);
 //     }
-//     base = BarrettReduction(base * base, divisor, mu);
+//     base = barrettReduction(base * base, divisor, mu);
 //   }
 //   return power;
 // }
 
 BigInt powmod(const BigInt& base, const BigInt& exponent, const BigInt& divisor) {
-  if (divisor.isZero()) {
+  if (divisor == 0) {
     throw std::domain_error("Modular exponentiation with zero divisor");
   }
 
@@ -745,7 +741,7 @@ BigInt powmod(const BigInt& base, const BigInt& exponent, const BigInt& divisor)
 }
 
 BigInt inversemod(BigInt value, const BigInt& modulus) {
-  if (modulus.isZero()) {
+  if (modulus == 0) {
     throw std::domain_error("Modular inverse with zero divisor");
   }
   if (!isCoprime(value, modulus)) {
@@ -758,7 +754,7 @@ BigInt inversemod(BigInt value, const BigInt& modulus) {
   BigInt x1(1);
   BigInt temp;
 
-  while (value > BigInt(1)) {
+  while (value > 1) {
     quotient = value / mod_copy;
     temp = mod_copy;
     mod_copy = value % mod_copy;
@@ -776,7 +772,7 @@ BigInt inversemod(BigInt value, const BigInt& modulus) {
 }
 
 bool congruencemod(const BigInt& a, const BigInt& b, const BigInt& modulus) {
-  if (modulus.isZero()) {
+  if (modulus == 0) {
     throw std::domain_error("Congruence check with zero divisor");
   }
 
@@ -800,7 +796,7 @@ bool congruencemod(const BigInt& a, const BigInt& b, const BigInt& modulus) {
 }
 
 bool isCoprime(const BigInt& a, const BigInt& b) {
-  return gcd(a, b) == BigInt(1);
+  return gcd(a, b) == 1;
 }
 
 int8_t symbolJacobi(BigInt a, BigInt n) {
@@ -813,26 +809,26 @@ int8_t symbolJacobi(BigInt a, BigInt n) {
 
   if (!a.positive_) {
     a.positive_ = true;
-    if (n % BigInt(4) == BigInt(3)) {
+    if (n % 4 == 3) {
       result = -result;
     }
   }
 
   while (a) {
     size_t twos_count = 0;
-    while (a.isEven()) {
+    while (a % 2 == 0) {
       a >>= 1;
       ++twos_count;
     }
 
     if (twos_count % 2) {
-      BigInt n_mod_8 = n % BigInt(8);
-      if (n_mod_8 == BigInt(3) || n_mod_8 == BigInt(5)) {
+      uint32_t n_mod_8 = n % 8;
+      if (n_mod_8 == 3 || n_mod_8 == 5) {
         result = -result;
       }
     }
 
-    if (a % BigInt(4) == BigInt(3) && n % BigInt(4) == BigInt(3)) {
+    if (a % 4 == 3 && n % 4 == 3) {
       result = -result;
     }
 
@@ -1060,8 +1056,9 @@ bool BigInt::operator||(const BigInt& rhs) const noexcept {
 }
 
 std::strong_ordering BigInt::operator<=>(const BigInt& rhs) const noexcept {
-  const bool this_zero = isZero();
-  const bool rhs_zero = rhs.isZero();
+  // Direct zero check to avoid recursion (don't use == 0 here)
+  const bool this_zero = digits_.empty() || (digits_.size() == 1 && digits_[0] == 0);
+  const bool rhs_zero = rhs.digits_.empty() || (rhs.digits_.size() == 1 && rhs.digits_[0] == 0);
 
   if (this_zero && rhs_zero) {
     return std::strong_ordering::equal;
@@ -1095,6 +1092,85 @@ bool BigInt::operator==(const BigInt& rhs) const noexcept {
   return (*this <=> rhs) == std::strong_ordering::equal;
 }
 
+std::strong_ordering BigInt::compareToSigned(const int64_t rhs) const noexcept {
+  // Direct zero check to avoid recursion (don't use == 0 here)
+  const bool this_zero = digits_.empty() || (digits_.size() == 1 && digits_[0] == 0);
+
+  // Fast path for zero comparison
+  if (rhs == 0) {
+    if (this_zero) {
+      return std::strong_ordering::equal;
+    }
+    return positive_ ? std::strong_ordering::greater : std::strong_ordering::less;
+  }
+
+  // Sign comparison
+  const bool rhs_positive = rhs > 0;
+  if (positive_ != rhs_positive) {
+    return positive_ ? std::strong_ordering::greater : std::strong_ordering::less;
+  }
+
+  // Both same sign - compare magnitudes
+  const uint64_t rhs_abs = rhs > 0 ? static_cast<uint64_t>(rhs) : static_cast<uint64_t>(-rhs);
+
+  // If we have more than 2 digits, we're definitely larger in magnitude
+  if (digits_.size() > 2) {
+    return positive_ ? std::strong_ordering::greater : std::strong_ordering::less;
+  }
+
+  // Get our magnitude as uint64_t
+  uint64_t this_abs = 0;
+  if (!digits_.empty()) {
+    this_abs = digits_[0];
+    if (digits_.size() > 1) {
+      this_abs |= static_cast<uint64_t>(digits_[1]) << 32;
+    }
+  }
+
+  // Compare magnitudes, accounting for sign
+  if (this_abs == rhs_abs) {
+    return std::strong_ordering::equal;
+  }
+  if (this_abs > rhs_abs) {
+    return positive_ ? std::strong_ordering::greater : std::strong_ordering::less;
+  }
+  return positive_ ? std::strong_ordering::less : std::strong_ordering::greater;
+}
+
+std::strong_ordering BigInt::compareToUnsigned(const uint64_t rhs) const noexcept {
+  // Direct zero check to avoid recursion (don't use == 0 here)
+  const bool this_zero = digits_.empty() || (digits_.size() == 1 && digits_[0] == 0);
+
+  // Negative BigInt is always less than unsigned
+  if (!positive_ && !this_zero) {
+    return std::strong_ordering::less;
+  }
+
+  // Fast path for zero comparison
+  if (rhs == 0) {
+    return this_zero ? std::strong_ordering::equal : std::strong_ordering::greater;
+  }
+
+  // If we have more than 2 digits, we're definitely larger
+  if (digits_.size() > 2) {
+    return std::strong_ordering::greater;
+  }
+
+  // Get our magnitude as uint64_t
+  uint64_t this_val = 0;
+  if (!digits_.empty()) {
+    this_val = digits_[0];
+    if (digits_.size() > 1) {
+      this_val |= static_cast<uint64_t>(digits_[1]) << 32;
+    }
+  }
+
+  if (this_val == rhs) {
+    return std::strong_ordering::equal;
+  }
+  return this_val > rhs ? std::strong_ordering::greater : std::strong_ordering::less;
+}
+
 int BigInt::compareMagnitude(const BigInt& other) const noexcept {
   if (digits_.size() > other.digits_.size()) {
     return 1;
@@ -1120,13 +1196,13 @@ BigInt abs(const BigInt& value) {
 }
 
 BigInt sqrt(const BigInt& value) {
-  if (value.isZero()) {
+  if (value == 0) {
     return BigInt();
   }
   if (!value.positive_) {
     throw std::domain_error("Square root of negative number is undefined");
   }
-  if (value == BigInt(1)) {
+  if (value == 1) {
     return BigInt(1);
   }
 
@@ -1155,18 +1231,18 @@ BigInt gcd(BigInt a, BigInt b) {
   a.positive_ = true;
   b.positive_ = true;
 
-  while (a.isEven() && b.isEven()) {
+  while (a % 2 == 0 && b % 2 == 0) {
     a >>= 1;
     b >>= 1;
     result <<= 1;
   }
 
-  while (a.isEven()) {
+  while (a % 2 == 0) {
     a >>= 1;
   }
 
   while (b) {
-    while (b.isEven()) {
+    while (b % 2 == 0) {
       b >>= 1;
     }
     BigInt temp = a;
@@ -1206,7 +1282,7 @@ bool millerRabinWitness(const BigInt& witness, const BigInt& d, size_t s, const 
   const BigInt n_minus_1 = n - BigInt(1);
   BigInt x = powmod(witness, d, n);
 
-  if (x == BigInt(1) || x == n_minus_1) {
+  if (x == 1 || x == n_minus_1) {
     return true;
   }
 
@@ -1215,7 +1291,7 @@ bool millerRabinWitness(const BigInt& witness, const BigInt& d, size_t s, const 
     if (x == n_minus_1) {
       return true;
     }
-    if (x == BigInt(1)) {
+    if (x == 1) {
       return false;
     }
   }
@@ -1226,19 +1302,19 @@ bool millerRabinWitness(const BigInt& witness, const BigInt& d, size_t s, const 
 }  // anonymous namespace
 
 bool BigInt::isProbablePrime(size_t rounds) const {
-  if (!positive_ || isZero()) {
+  if (!positive_ || *this == 0) {
     return false;
   }
-  if (*this == BigInt(2) || *this == BigInt(3)) {
+  if (*this == 2 || *this == 3) {
     return true;
   }
-  if (isEven() || *this < BigInt(2)) {
+  if (*this % 2 == 0 || *this < 2) {
     return false;
   }
 
   // Quick divisibility check using small primes from anonymous namespace
   for (uint32_t p : kSmallPrimes) {
-    if (*this == BigInt(p)) {
+    if (*this == p) {
       return true;
     }
     if (*this % p == 0) {
@@ -1249,23 +1325,23 @@ bool BigInt::isProbablePrime(size_t rounds) const {
   // Write n-1 as 2^s * d where d is odd
   BigInt d = *this - BigInt(1);
   size_t s = 0;
-  while (d.isEven()) {
+  while (d % 2 == 0) {
     d >>= 1;
     ++s;
   }
 
   // Deterministic witnesses for small numbers
-  if (*this < BigInt(2047)) {
+  if (*this < 2047) {
     return millerRabinWitness(BigInt(2), d, s, *this);
   }
-  if (*this < BigInt(1373653)) {
+  if (*this < 1373653) {
     return millerRabinWitness(BigInt(2), d, s, *this) && millerRabinWitness(BigInt(3), d, s, *this);
   }
-  if (*this < BigInt(25326001)) {
+  if (*this < 25326001) {
     return millerRabinWitness(BigInt(2), d, s, *this) &&
            millerRabinWitness(BigInt(3), d, s, *this) && millerRabinWitness(BigInt(5), d, s, *this);
   }
-  if (*this < BigInt(3215031751ULL)) {
+  if (*this < 3215031751ULL) {
     return millerRabinWitness(BigInt(2), d, s, *this) &&
            millerRabinWitness(BigInt(3), d, s, *this) &&
            millerRabinWitness(BigInt(5), d, s, *this) && millerRabinWitness(BigInt(7), d, s, *this);
@@ -1315,7 +1391,7 @@ BigInt BigInt::randomBits(size_t num_bits) {
 }
 
 BigInt BigInt::randomBelow(const BigInt& upper_bound) {
-  if (upper_bound <= BigInt(1)) {
+  if (upper_bound <= 1) {
     return BigInt();
   }
 
@@ -1343,13 +1419,13 @@ BigInt BigInt::randomPrime(size_t num_bits) {
   while (true) {
     BigInt candidate = randomBits(num_bits);
 
-    if (candidate.isEven()) {
+    if (candidate % 2 == 0) {
       candidate.digits_[0] |= 1;
     }
 
     bool divisible = false;
     for (uint32_t p : kSmallPrimes) {
-      if (candidate == BigInt(p)) {
+      if (candidate == p) {
         return candidate;
       }
       if (candidate % p == 0) {
@@ -1369,15 +1445,15 @@ BigInt BigInt::randomPrime(size_t num_bits) {
 }
 
 BigInt BigInt::nextPrime() const {
-  if (*this <= BigInt(2)) {
+  if (*this <= 2) {
     return BigInt(2);
   }
-  if (*this == BigInt(3)) {
+  if (*this == 3) {
     return BigInt(3);
   }
 
   BigInt candidate = *this;
-  if (candidate.isEven()) {
+  if (candidate % 2 == 0) {
     candidate += BigInt(1);
   }
 
@@ -1390,7 +1466,7 @@ BigInt BigInt::nextPrime() const {
 
     bool divisible = false;
     for (uint32_t p : kSmallPrimes) {
-      if (candidate == BigInt(p)) {
+      if (candidate == p) {
         return candidate;
       }
       if (candidate % p == 0) {
@@ -1424,7 +1500,7 @@ std::ostream& operator<<(std::ostream& out, const BigInt& value) {
   }
 
   // Handle zero specially
-  if (value.isZero()) {
+  if (value == 0) {
     if ((flags & std::ios::showbase) && base == kBaseHexadecimal) {
       out << (flags & std::ios::uppercase ? "0X0" : "0x0");
     } else {
@@ -1469,17 +1545,17 @@ std::istream& operator>>(std::istream& in, BigInt& value) {
   return in;
 }
 
-BigInt BarrettReduction(const BigInt& dividend, const BigInt& divisor, const BigInt& mu) {
-  BigInt remainder = dividend - ((dividend.shiftDigitsToLow(divisor.digits_.size() - 1) * mu)
-                                     .shiftDigitsToLow(divisor.digits_.size() + 1) *
-                                 divisor);
-
-  while (remainder >= divisor) {
-    remainder -= divisor;
-  }
-
-  return remainder;
-}
+// BigInt barrettReduction(const BigInt& dividend, const BigInt& divisor, const BigInt& mu) {
+//   BigInt remainder = dividend - ((dividend.shiftDigitsToLow(divisor.digits_.size() - 1) * mu)
+//                                      .shiftDigitsToLow(divisor.digits_.size() + 1) *
+//                                  divisor);
+//
+//   while (remainder >= divisor) {
+//     remainder -= divisor;
+//   }
+//
+//   return remainder;
+// }
 
 std::string BigInt::toStdString(const uint8_t base) const {
   std::stringstream ss;
@@ -1546,7 +1622,7 @@ BigInt::operator std::vector<uint8_t>() const {
   return result;
 }
 
-BigInt::operator uint64_t() const noexcept {
+uint64_t BigInt::toUint64() const noexcept {
   if (digits_.empty()) {
     return 0;
   }
@@ -1557,36 +1633,9 @@ BigInt::operator uint64_t() const noexcept {
   return digits_.front();
 }
 
-BigInt::operator uint32_t() const noexcept {
-  return digits_.empty() ? 0 : digits_.front();
-}
-
-BigInt::operator uint16_t() const noexcept {
-  return digits_.empty() ? static_cast<uint16_t>(0) : static_cast<uint16_t>(digits_.front());
-}
-
-BigInt::operator uint8_t() const noexcept {
-  return digits_.empty() ? static_cast<uint8_t>(0) : static_cast<uint8_t>(digits_.front());
-}
-
-BigInt::operator int64_t() const noexcept {
-  const auto magnitude = static_cast<uint64_t>(*this);
+int64_t BigInt::toInt64() const noexcept {
+  const auto magnitude = toUint64();
   return positive_ ? static_cast<int64_t>(magnitude) : -static_cast<int64_t>(magnitude);
-}
-
-BigInt::operator int32_t() const noexcept {
-  const auto magnitude = static_cast<uint32_t>(*this);
-  return positive_ ? static_cast<int32_t>(magnitude) : -static_cast<int32_t>(magnitude);
-}
-
-BigInt::operator int16_t() const noexcept {
-  const auto magnitude = static_cast<uint16_t>(*this);
-  return positive_ ? static_cast<int16_t>(magnitude) : -static_cast<int16_t>(magnitude);
-}
-
-BigInt::operator int8_t() const noexcept {
-  const auto magnitude = static_cast<uint8_t>(*this);
-  return positive_ ? static_cast<int8_t>(magnitude) : -static_cast<int8_t>(magnitude);
 }
 
 BigInt::operator bool() const noexcept {
@@ -1632,30 +1681,6 @@ size_t BigInt::byteLength() const noexcept {
   return len + high_bytes;
 }
 
-size_t BigInt::digitCount() const noexcept {
-  return digits_.size();
-}
-
-bool BigInt::isZero() const noexcept {
-  return digits_.empty() || (digits_.size() == 1 && digits_[0] == 0);
-}
-
-bool BigInt::isEven() const noexcept {
-  return digits_.empty() || !(digits_.front() & 1);
-}
-
-bool BigInt::isOdd() const noexcept {
-  return !digits_.empty() && (digits_.front() & 1);
-}
-
-bool BigInt::isPositive() const noexcept {
-  return positive_ && !isZero();
-}
-
-bool BigInt::isNegative() const noexcept {
-  return !positive_ && !isZero();
-}
-
 void BigInt::alignTo(BigInt& other) {
   if (digits_.size() > other.digits_.size()) {
     other.digits_.reserve(digits_.size());
@@ -1697,7 +1722,7 @@ BigInt BigInt::shiftDigitsToLow(size_t shift) const {
 }
 
 BigInt BigInt::multiplySchoolbook(const BigInt& other) const {
-  if (digits_.empty() || other.digits_.empty() || isZero() || other.isZero()) {
+  if (digits_.empty() || other.digits_.empty() || *this == 0 || other == 0) {
     return BigInt();
   }
 
@@ -1725,7 +1750,7 @@ BigInt BigInt::multiplySchoolbook(const BigInt& other) const {
 }
 
 BigInt BigInt::multiplyKaratsuba(const BigInt& other) const {
-  if (isZero() || other.isZero()) {
+  if (*this == 0 || other == 0) {
     return BigInt();
   }
 
@@ -1796,3 +1821,5 @@ BigInt BigInt::toBigIntDec() const {
 }
 
 }  // namespace bigint
+
+

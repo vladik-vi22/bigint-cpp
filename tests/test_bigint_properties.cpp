@@ -94,7 +94,8 @@ TEST_F(BigIntPropertyTest, MultiplicationDivisionIdentity) {
   for (size_t i = 0; i < kIterations; ++i) {
     BigInt a = randomSigned(kMediumBits);
     BigInt b = randomNonZero(kSmallBits);
-    if (b.isNegative()) b = -b;  // Use positive divisor for simpler test
+    if (b < 0)
+      b = -b;  // Use positive divisor for simpler test
     EXPECT_EQ((a * b) / b, a) << "Failed for a=" << a << ", b=" << b;
   }
 }
@@ -194,8 +195,9 @@ TEST_F(BigIntPropertyTest, PowerModCorrectness) {
     BigInt base = BigInt::randomBits(kSmallBits);
     BigInt exp = BigInt::randomBits(4);  // Small exponent to avoid huge numbers
     BigInt mod = randomNonZero(kMediumBits);
-    if (mod.isNegative()) mod = -mod;
-    
+    if (mod < 0)
+      mod = -mod;
+
     BigInt expected = pow(base, exp) % mod;
     BigInt actual = powmod(base, exp, mod);
     EXPECT_EQ(actual, expected);
@@ -382,7 +384,7 @@ TEST_F(BigIntPropertyTest, KaratsubaThresholdOperations) {
     BigInt a = BigInt::randomBits(bits);
     BigInt b = BigInt::randomBits(bits);
     BigInt product = a * b;
-    
+
     // Verify via division
     if (b != BigInt(0)) {
       EXPECT_EQ(product / b, a);

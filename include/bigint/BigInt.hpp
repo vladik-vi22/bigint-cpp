@@ -8,10 +8,12 @@
 
 #include <array>
 #include <compare>
+#include <concepts>
 #include <cstdint>
 #include <iosfwd>
 #include <span>
 #include <string>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -61,17 +63,10 @@ class BigInt {
   /// @note std::vector<bool> is a special case that cannot use std::span.
   explicit BigInt(const std::vector<bool>& vec, bool is_positive = true);
 
-  /// @brief Construct from 64-bit unsigned integer.
-  explicit BigInt(uint64_t value, bool is_positive = true);
-
-  /// @brief Construct from 32-bit unsigned integer.
-  explicit BigInt(uint32_t value, bool is_positive = true);
-
-  /// @brief Construct from 64-bit signed integer.
-  explicit BigInt(int64_t value);
-
-  /// @brief Construct from 32-bit signed integer.
-  explicit BigInt(int32_t value);
+  /// @brief Construct from any integral type.
+  /// @details Handles int8_t, int16_t, int32_t, int64_t, uint8_t, uint16_t, uint32_t, uint64_t.
+  template <std::integral T>
+  explicit BigInt(T value);
 
   ~BigInt() = default;
   /// @}
@@ -187,6 +182,14 @@ class BigInt {
   /// @{
   [[nodiscard]] std::strong_ordering operator<=>(const BigInt& rhs) const noexcept;
   [[nodiscard]] bool operator==(const BigInt& rhs) const noexcept;
+
+  /// @brief Compare with any integral type.
+  /// @details Handles int8_t through int64_t and uint8_t through uint64_t.
+  template <std::integral T>
+  [[nodiscard]] std::strong_ordering operator<=>(T rhs) const noexcept;
+
+  template <std::integral T>
+  [[nodiscard]] bool operator==(T rhs) const noexcept;
   /// @}
 
   /// @name Utility Functions
@@ -266,18 +269,12 @@ class BigInt {
   /// @details Used for serialization, hashing, and crypto protocols.
   [[nodiscard]] explicit operator std::vector<uint8_t>() const;
 
-  [[nodiscard]] explicit operator uint64_t() const noexcept;  ///< Convert to uint64_t (truncates)
-  [[nodiscard]] explicit operator uint32_t() const noexcept;  ///< Convert to uint32_t (truncates)
-  [[nodiscard]] explicit operator uint16_t() const noexcept;  ///< Convert to uint16_t (truncates)
-  [[nodiscard]] explicit operator uint8_t() const noexcept;   ///< Convert to uint8_t (truncates)
-  [[nodiscard]] explicit operator int64_t()
-      const noexcept;  ///< Convert to int64_t (truncates, preserves sign)
-  [[nodiscard]] explicit operator int32_t()
-      const noexcept;  ///< Convert to int32_t (truncates, preserves sign)
-  [[nodiscard]] explicit operator int16_t()
-      const noexcept;  ///< Convert to int16_t (truncates, preserves sign)
-  [[nodiscard]] explicit operator int8_t()
-      const noexcept;  ///< Convert to int8_t (truncates, preserves sign)
+  /// @brief Convert to any integral type (truncates if value doesn't fit).
+  /// @details Handles int8_t through int64_t and uint8_t through uint64_t.
+  ///          Signed types preserve sign, unsigned types return absolute value.
+  template <std::integral T>
+  [[nodiscard]] explicit operator T() const noexcept;
+
   [[nodiscard]] explicit operator bool() const noexcept;  ///< True if non-zero
   /// @}
 
@@ -285,13 +282,7 @@ class BigInt {
   /// @{
   [[nodiscard]] size_t bitLength() const noexcept;   ///< Number of bits (minimum 1 for zero)
   [[nodiscard]] size_t byteLength() const noexcept;  ///< Number of bytes needed
-  [[nodiscard]] size_t digitCount() const noexcept;  ///< Number of 32-bit digits
-  [[nodiscard]] bool isZero() const noexcept;        ///< True if value is zero
-  [[nodiscard]] bool isEven() const noexcept;        ///< True if value is even
-  [[nodiscard]] bool isOdd() const noexcept;         ///< True if value is odd
-  [[nodiscard]] bool isPositive() const noexcept;    ///< True if value >= 0
-  [[nodiscard]] bool isNegative() const noexcept;    ///< True if value < 0
-  /// @}
+                                                     /// @}
 
  private:
   bool positive_;                 ///< Sign flag (true = positive or zero)
@@ -320,7 +311,49 @@ class BigInt {
   /// @param other The multiplier.
   /// @return Product of absolute values (sign handled by caller).
   [[nodiscard]] BigInt multiplySchoolbook(const BigInt& other) const;
+
+  // Helper for integral constructor/comparison
+  void initFromUnsigned(uint64_t value, bool is_positive);
+  void initFromSigned(int64_t value);
+  [[nodiscard]] std::strong_ordering compareToSigned(int64_t rhs) const noexcept;
+  [[nodiscard]] std::strong_ordering compareToUnsigned(uint64_t rhs) const noexcept;
+  [[nodiscard]] uint64_t toUint64() const noexcept;
+  [[nodiscard]] int64_t toInt64() const noexcept;
 };
+
+// Template implementations
+
+template <std::integral T>
+BigInt::BigInt(T value) {
+  if constexpr (std::is_signed_v<T>) {
+    initFromSigned(static_cast<int64_t>(value));
+  } else {
+    initFromUnsigned(static_cast<uint64_t>(value), true);
+  }
+}
+
+template <std::integral T>
+std::strong_ordering BigInt::operator<=>(T rhs) const noexcept {
+  if constexpr (std::is_signed_v<T>) {
+    return compareToSigned(static_cast<int64_t>(rhs));
+  } else {
+    return compareToUnsigned(static_cast<uint64_t>(rhs));
+  }
+}
+
+template <std::integral T>
+bool BigInt::operator==(T rhs) const noexcept {
+  return (*this <=> rhs) == std::strong_ordering::equal;
+}
+
+template <std::integral T>
+BigInt::operator T() const noexcept {
+  if constexpr (std::is_signed_v<T>) {
+    return static_cast<T>(toInt64());
+  } else {
+    return static_cast<T>(toUint64());
+  }
+}
 
 }  // namespace bigint
 
@@ -332,7 +365,7 @@ struct hash<bigint::BigInt> {
   size_t operator()(const bigint::BigInt& value) const noexcept {
     // FNV-1a inspired hash combining sign and bytes
     size_t h = 14695981039346656037ULL;  // FNV offset basis
-    h ^= static_cast<size_t>(value.isNegative());
+    h ^= static_cast<size_t>(value < 0);
     h *= 1099511628211ULL;  // FNV prime
     for (uint8_t byte : static_cast<std::vector<uint8_t>>(value)) {
       h ^= static_cast<size_t>(byte);

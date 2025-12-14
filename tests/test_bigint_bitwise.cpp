@@ -55,14 +55,14 @@ TEST_F(BigIntBitwiseTest, ShiftByZero) {
 
 TEST_F(BigIntBitwiseTest, ShiftZero) {
   BigInt zero;
-  EXPECT_TRUE((zero << static_cast<size_t>(10)).isZero());
-  EXPECT_TRUE((zero >> static_cast<size_t>(10)).isZero());
+  EXPECT_TRUE((zero << static_cast<size_t>(10)) == 0);
+  EXPECT_TRUE((zero >> static_cast<size_t>(10)) == 0);
 }
 
 TEST_F(BigIntBitwiseTest, RightShiftToZero) {
   BigInt num("255", 10);
   BigInt result = num >> static_cast<size_t>(100);  // Shift more than bit length
-  EXPECT_TRUE(result.isZero());
+  EXPECT_TRUE(result == 0);
 }
 
 TEST_F(BigIntBitwiseTest, LargeShift) {
@@ -79,7 +79,7 @@ TEST_F(BigIntBitwiseTest, BitwiseWithZero) {
   BigInt num("12345", 10);
   BigInt zero;
 
-  EXPECT_TRUE((num & zero).isZero());
+  EXPECT_TRUE((num & zero) == 0);
   EXPECT_EQ((num | zero).toStdString(10), "12345");
   EXPECT_EQ((num ^ zero).toStdString(10), "12345");
 }
@@ -89,5 +89,5 @@ TEST_F(BigIntBitwiseTest, BitwiseWithSelf) {
 
   EXPECT_EQ((num & num).toStdString(10), "12345");
   EXPECT_EQ((num | num).toStdString(10), "12345");
-  EXPECT_TRUE((num ^ num).isZero());
+  EXPECT_TRUE((num ^ num) == 0);
 }
