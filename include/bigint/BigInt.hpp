@@ -10,6 +10,7 @@
 #include <compare>
 #include <cstdint>
 #include <iosfwd>
+#include <span>
 #include <string>
 #include <utility>
 #include <vector>
@@ -44,21 +45,20 @@ class BigInt {
   /// @throws std::invalid_argument if str contains invalid characters for the base.
   explicit BigInt(std::string str, uint8_t base = kDefaultInputBase);
 
-  /// @brief Construct from fixed-size array of 32-bit words (big-endian order).
-  template <size_t N>
-  explicit BigInt(const std::array<uint32_t, N>& arr, bool is_positive = true)
-      : positive_(is_positive), digits_(arr.crbegin(), arr.crend()) {}
+  /// @brief Construct from span of 32-bit words (big-endian order).
+  /// @details Accepts any contiguous range: std::vector, std::array, C arrays, etc.
+  explicit BigInt(std::span<const uint32_t> data, bool is_positive = true);
 
-  /// @brief Construct from vector of 32-bit words (big-endian order).
-  explicit BigInt(const std::vector<uint32_t>& vec, bool is_positive = true);
+  /// @brief Construct from span of 16-bit words (big-endian order).
+  /// @details Accepts any contiguous range: std::vector, std::array, C arrays, etc.
+  explicit BigInt(std::span<const uint16_t> data, bool is_positive = true);
 
-  /// @brief Construct from vector of 16-bit words (big-endian order).
-  explicit BigInt(const std::vector<uint16_t>& vec, bool is_positive = true);
-
-  /// @brief Construct from vector of bytes (big-endian order).
-  explicit BigInt(const std::vector<uint8_t>& vec, bool is_positive = true);
+  /// @brief Construct from span of bytes (big-endian order).
+  /// @details Accepts any contiguous range: std::vector, std::array, C arrays, etc.
+  explicit BigInt(std::span<const uint8_t> data, bool is_positive = true);
 
   /// @brief Construct from vector of bits (big-endian order).
+  /// @note std::vector<bool> is a special case that cannot use std::span.
   explicit BigInt(const std::vector<bool>& vec, bool is_positive = true);
 
   /// @brief Construct from 64-bit unsigned integer.
@@ -249,6 +249,9 @@ class BigInt {
   /// @{
 
   /// @brief Convert to string in specified base (2, 10, or 16).
+  /// @param base The numeric base.
+  /// @note For formatted output with uppercase, showbase, etc., use operator<<
+  ///       with standard stream manipulators (std::hex, std::uppercase, etc.)
   [[nodiscard]] std::string toStdString(uint8_t base = kDefaultOutputBase) const;
 
   /// @brief Convert to vector of 32-bit words (big-endian order).

@@ -220,3 +220,125 @@ TEST_F(BigIntBasicTest, ByteLengthEdgeCases) {
   EXPECT_EQ(BigInt("65535", 10).byteLength(), 2);
   EXPECT_EQ(BigInt("65536", 10).byteLength(), 3);
 }
+
+// ============================================================================
+// std::span Constructor Tests
+// ============================================================================
+
+TEST_F(BigIntBasicTest, SpanConstructorUint32FromCArray) {
+  // Test with C array - this is the main use case for span
+  uint32_t c_arr[] = {0x12345678, 0x9ABCDEF0};
+  BigInt from_c_arr(std::span<const uint32_t>{c_arr});
+  EXPECT_EQ(from_c_arr.toStdString(16), "123456789abcdef0");
+
+  // Test negative
+  BigInt negative(std::span<const uint32_t>{c_arr}, false);
+  EXPECT_EQ(negative.toStdString(16), "-123456789abcdef0");
+}
+
+TEST_F(BigIntBasicTest, SpanConstructorUint16FromCArray) {
+  // Test with C array
+  uint16_t c_arr[] = {0x1234, 0x5678, 0x9ABC, 0xDEF0};
+  BigInt from_c_arr(std::span<const uint16_t>{c_arr});
+  EXPECT_EQ(from_c_arr.toStdString(16), "123456789abcdef0");
+
+  // Test with odd number of elements
+  uint16_t odd_arr[] = {0x00AB, 0xCDEF};
+  BigInt from_odd(std::span<const uint16_t>{odd_arr});
+  EXPECT_EQ(from_odd.toStdString(16), "abcdef");
+}
+
+TEST_F(BigIntBasicTest, SpanConstructorUint8FromCArray) {
+  // Test with C array (bytes)
+  uint8_t c_arr[] = {0x12, 0x34, 0x56, 0x78, 0x9A, 0xBC, 0xDE, 0xF0};
+  BigInt from_c_arr(std::span<const uint8_t>{c_arr});
+  EXPECT_EQ(from_c_arr.toStdString(16), "123456789abcdef0");
+
+  // Test with 5 bytes
+  uint8_t five_bytes[] = {0x01, 0x23, 0x45, 0x67, 0x89};
+  BigInt from_five(std::span<const uint8_t>{five_bytes});
+  EXPECT_EQ(from_five.toStdString(16), "123456789");
+
+  // Test with 3 bytes
+  uint8_t three_bytes[] = {0xAB, 0xCD, 0xEF};
+  BigInt from_three(std::span<const uint8_t>{three_bytes});
+  EXPECT_EQ(from_three.toStdString(16), "abcdef");
+
+  // Test with 2 bytes
+  uint8_t two_bytes[] = {0x12, 0x34};
+  BigInt from_two(std::span<const uint8_t>{two_bytes});
+  EXPECT_EQ(from_two.toStdString(16), "1234");
+
+  // Test with 1 byte
+  uint8_t one_byte[] = {0xFF};
+  BigInt from_one(std::span<const uint8_t>{one_byte});
+  EXPECT_EQ(from_one.toStdString(16), "ff");
+
+  // Test CAFEBABE (happy Java cows!)
+  uint8_t cafebabe[] = {0xCA, 0xFE, 0xBA, 0xBE};
+  BigInt from_cafebabe(std::span<const uint8_t>{cafebabe});
+  EXPECT_EQ(from_cafebabe.toStdString(16), "cafebabe");
+}
+
+TEST_F(BigIntBasicTest, StreamOutputWithManipulators) {
+  BigInt hex_value("abcdef123456", 16);
+
+  // Default hex output (lowercase)
+  {
+    std::ostringstream ss;
+    ss << std::hex << hex_value;
+    EXPECT_EQ(ss.str(), "abcdef123456");
+  }
+
+  // Uppercase hex
+  {
+    std::ostringstream ss;
+    ss << std::hex << std::uppercase << hex_value;
+    EXPECT_EQ(ss.str(), "ABCDEF123456");
+  }
+
+  // Hex with showbase (0x prefix)
+  {
+    std::ostringstream ss;
+    ss << std::hex << std::showbase << hex_value;
+    EXPECT_EQ(ss.str(), "0xabcdef123456");
+  }
+
+  // Uppercase hex with showbase (0X prefix)
+  {
+    std::ostringstream ss;
+    ss << std::hex << std::uppercase << std::showbase << hex_value;
+    EXPECT_EQ(ss.str(), "0XABCDEF123456");
+  }
+
+  // Decimal output
+  {
+    std::ostringstream ss;
+    ss << std::dec << hex_value;
+    EXPECT_EQ(ss.str(), "188900967593046");
+  }
+
+  // Negative number with uppercase and showbase
+  {
+    BigInt negative("-cafe", 16);
+    std::ostringstream ss;
+    ss << std::hex << std::uppercase << std::showbase << negative;
+    EXPECT_EQ(ss.str(), "-0XCAFE");
+  }
+
+  // Zero with showbase
+  {
+    BigInt zero;
+    std::ostringstream ss;
+    ss << std::hex << std::showbase << zero;
+    EXPECT_EQ(ss.str(), "0x0");
+  }
+}
+
+TEST_F(BigIntBasicTest, SpanConstructorLeadingZeros) {
+  // Leading zeros should be stripped
+  uint32_t with_zeros[] = {0x00000000, 0x00000000, 0x12345678};
+  BigInt from_zeros(std::span<const uint32_t>{with_zeros});
+  EXPECT_EQ(from_zeros.toStdString(16), "12345678");
+  EXPECT_EQ(from_zeros.digitCount(), 1);  // Only one digit after normalization
+}

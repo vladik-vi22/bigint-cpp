@@ -129,47 +129,6 @@ BigInt::BigInt(std::string str, const uint8_t base) {
   }
 }
 
-BigInt::BigInt(const std::vector<uint32_t>& vec, const bool is_positive_)
-    : positive_(is_positive_), digits_(vec) {
-  std::reverse(digits_.begin(), digits_.end());
-  deleteZeroHighOrderDigit();
-}
-
-BigInt::BigInt(const std::vector<uint16_t>& vec, const bool is_positive_) {
-  digits_.reserve(vec.size() & 1 ? (vec.size() >> 1) + 1 : vec.size() >> 1);
-  auto it = vec.crbegin();
-  for (size_t i = 0; i < (vec.size() >> 1); ++i) {
-    digits_.emplace_back(static_cast<uint32_t>(*it) | static_cast<uint32_t>(*(++it)) << 16);
-    ++it;
-  }
-  if (vec.size() & 1) {
-    digits_.emplace_back(static_cast<uint32_t>(*it));
-  }
-  deleteZeroHighOrderDigit();
-  positive_ = is_positive_;
-}
-
-BigInt::BigInt(const std::vector<uint8_t>& vec, const bool is_positive_) {
-  digits_.reserve(vec.size() & 3 ? (vec.size() >> 2) + 1 : vec.size() >> 2);
-  auto it = vec.crbegin();
-  for (size_t i = 0; i < (vec.size() >> 2); ++i) {
-    digits_.emplace_back(static_cast<uint32_t>(*it) | static_cast<uint32_t>(*(++it)) << 8 |
-                         static_cast<uint32_t>(*(++it)) << 16 |
-                         static_cast<uint32_t>(*(++it)) << 24);
-    ++it;
-  }
-  if ((vec.size() & 3) == 3) {
-    digits_.emplace_back(static_cast<uint32_t>(*it) | static_cast<uint32_t>(*(++it)) << 8 |
-                         static_cast<uint32_t>(*(++it)) << 16);
-  } else if ((vec.size() & 3) == 2) {
-    digits_.emplace_back(static_cast<uint32_t>(*it) | static_cast<uint32_t>(*(++it)) << 8);
-  } else if ((vec.size() & 3) == 1) {
-    digits_.emplace_back(static_cast<uint32_t>(*it));
-  }
-  deleteZeroHighOrderDigit();
-  positive_ = is_positive_;
-}
-
 BigInt::BigInt(const std::vector<bool>& vec, const bool is_positive_) {
   digits_.reserve(vec.size() & 31 ? (vec.size() >> 5) + 1 : vec.size() >> 5);
   uint32_t element;
@@ -189,6 +148,57 @@ BigInt::BigInt(const std::vector<bool>& vec, const bool is_positive_) {
       ++it;
     }
     digits_.emplace_back(element);
+  }
+  deleteZeroHighOrderDigit();
+  positive_ = is_positive_;
+}
+
+BigInt::BigInt(std::span<const uint32_t> data, const bool is_positive_) : positive_(is_positive_) {
+  digits_.reserve(data.size());
+  // Input is big-endian, internal storage is little-endian
+  for (auto it = data.rbegin(); it != data.rend(); ++it) {
+    digits_.emplace_back(*it);
+  }
+  deleteZeroHighOrderDigit();
+}
+
+BigInt::BigInt(std::span<const uint16_t> data, const bool is_positive_) {
+  digits_.reserve((data.size() + 1) / 2);
+  // Process from end (big-endian input) in pairs
+  size_t i = data.size();
+  while (i >= 2) {
+    i -= 2;
+    digits_.emplace_back(static_cast<uint32_t>(data[i + 1]) |
+                         (static_cast<uint32_t>(data[i]) << 16));
+  }
+  if (i == 1) {
+    digits_.emplace_back(static_cast<uint32_t>(data[0]));
+  }
+  deleteZeroHighOrderDigit();
+  positive_ = is_positive_;
+}
+
+BigInt::BigInt(std::span<const uint8_t> data, const bool is_positive_) {
+  digits_.reserve((data.size() + 3) / 4);
+  // Process from end (big-endian input) in groups of 4
+  size_t i = data.size();
+  while (i >= 4) {
+    i -= 4;
+    digits_.emplace_back(static_cast<uint32_t>(data[i + 3]) |
+                         (static_cast<uint32_t>(data[i + 2]) << 8) |
+                         (static_cast<uint32_t>(data[i + 1]) << 16) |
+                         (static_cast<uint32_t>(data[i]) << 24));
+  }
+  // Handle remaining bytes
+  if (i == 3) {
+    digits_.emplace_back(static_cast<uint32_t>(data[2]) |
+                         (static_cast<uint32_t>(data[1]) << 8) |
+                         (static_cast<uint32_t>(data[0]) << 16));
+  } else if (i == 2) {
+    digits_.emplace_back(static_cast<uint32_t>(data[1]) |
+                         (static_cast<uint32_t>(data[0]) << 8));
+  } else if (i == 1) {
+    digits_.emplace_back(static_cast<uint32_t>(data[0]));
   }
   deleteZeroHighOrderDigit();
   positive_ = is_positive_;
@@ -1378,7 +1388,54 @@ BigInt BigInt::nextPrime() const {
 }
 
 std::ostream& operator<<(std::ostream& out, const BigInt& value) {
-  std::string str = value.toStdString(kDefaultOutputBase);
+  // Respect stream format flags like std::hex, std::uppercase, std::showbase
+  const auto flags = out.flags();
+  const auto base_field = flags & std::ios::basefield;
+
+  // Determine base from stream flags
+  uint8_t base = kBaseDecimal;
+  if (base_field == std::ios::hex) {
+    base = kBaseHexadecimal;
+  } else if (base_field == std::ios::oct) {
+    // Octal not supported, fall back to decimal
+    base = kBaseDecimal;
+  }
+
+  // Handle zero specially
+  if (value.isZero()) {
+    if ((flags & std::ios::showbase) && base == kBaseHexadecimal) {
+      out << (flags & std::ios::uppercase ? "0X0" : "0x0");
+    } else {
+      out << '0';
+    }
+    return out;
+  }
+
+  // Build the output string
+  std::string str = value.toStdString(base);
+
+  // Apply uppercase if requested (for hex)
+  if ((flags & std::ios::uppercase) && base == kBaseHexadecimal) {
+    for (char& c : str) {
+      if (c >= 'a' && c <= 'f') {
+        c = static_cast<char>(c - 'a' + 'A');
+      }
+    }
+  }
+
+  // Add base prefix if showbase is set
+  if (flags & std::ios::showbase) {
+    if (base == kBaseHexadecimal) {
+      const bool is_negative = !str.empty() && str[0] == '-';
+      const std::string prefix = (flags & std::ios::uppercase) ? "0X" : "0x";
+      if (is_negative) {
+        str.insert(1, prefix);  // Insert after minus sign
+      } else {
+        str.insert(0, prefix);
+      }
+    }
+  }
+
   out << str;
   return out;
 }
@@ -1402,7 +1459,7 @@ BigInt BarrettReduction(const BigInt& dividend, const BigInt& divisor, const Big
   return remainder;
 }
 
-std::string BigInt::toStdString(uint8_t base) const {
+std::string BigInt::toStdString(const uint8_t base) const {
   std::stringstream ss;
 
   if (digits_.empty() || !(*this)) {
