@@ -20,6 +20,7 @@ add_executable(bigint_tests
     test_bigint_basic.cpp
     test_bigint_arithmetic.cpp
     test_bigint_bitwise.cpp
+    test_bigint_properties.cpp
 )
 
 target_link_libraries(bigint_tests

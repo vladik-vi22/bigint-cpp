@@ -553,15 +553,24 @@ std::pair<BigInt, BigInt> BigInt::DivMod(const BigInt& divisor) const {
   }
 
   const BigInt abs_divisor = abs(divisor);
+  const BigInt abs_dividend = abs(*this);
   const size_t divisor_bit_len = abs_divisor.bitLength();
 
   BigInt quotient;
   quotient.digits_.reserve(digits_.size());
 
-  BigInt remainder = abs(*this);
+  BigInt remainder = abs_dividend;
 
   if (remainder < abs_divisor) {
-    quotient.positive_ = (positive_ == divisor.positive_);
+    // |dividend| < |divisor|, so quotient = 0
+    // For negative dividend with positive divisor, we need to adjust
+    if (!positive_ && !remainder.isZero()) {
+      // -a = -1 * b + (b - a) when 0 < a < b
+      quotient = BigInt(-1);
+      remainder = abs_divisor - remainder;
+      quotient.positive_ = !divisor.positive_;
+      return std::make_pair(quotient, remainder);
+    }
     remainder.positive_ = positive_;
     return std::make_pair(quotient, remainder);
   }
@@ -589,13 +598,32 @@ std::pair<BigInt, BigInt> BigInt::DivMod(const BigInt& divisor) const {
     quotient += power_of_two;
   }
 
-  quotient.positive_ = (positive_ == divisor.positive_);
-  remainder.positive_ = positive_;
+  // Now we have: |dividend| = quotient * |divisor| + remainder
+  // where 0 <= remainder < |divisor|
 
-  if (divisor.positive_) {
-    while (!remainder.positive_) {
-      remainder += divisor;
+  // Handle signs according to truncated division (C++ standard):
+  // dividend = quotient * divisor + remainder
+  // where remainder has the same sign as dividend (or is zero)
+
+  if (!positive_) {
+    // Negative dividend: -|dividend| = -quotient * |divisor| - remainder
+    // If remainder != 0, we need: -|dividend| = (-quotient - 1) * |divisor| + (|divisor| - remainder)
+    // But for truncated division (C++ standard), remainder has same sign as dividend
+    // So: quotient = -quotient, remainder = -remainder
+    if (!remainder.isZero()) {
+      remainder.positive_ = false;
     }
+    quotient.positive_ = false;
+  }
+
+  if (!divisor.positive_) {
+    // Negative divisor: flip quotient sign
+    quotient.positive_ = !quotient.positive_;
+  }
+
+  // Handle zero quotient sign
+  if (quotient.isZero()) {
+    quotient.positive_ = true;
   }
 
   return std::make_pair(quotient, remainder);
@@ -881,6 +909,7 @@ BigInt BigInt::operator^(const BigInt& rhs) const {
     }
 
     result.positive_ = true;
+    result.deleteZeroHighOrderDigit();
     return result;
   } else {
     return (*this | rhs) & (~*this | ~rhs);
