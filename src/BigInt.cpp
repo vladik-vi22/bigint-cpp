@@ -15,7 +15,7 @@
  * - **Division**: Knuth Algorithm D (multi-word long division with normalization)
  * - **Modular Exponentiation**: Montgomery CIOS for large odd moduli, standard square-and-multiply otherwise
  * - **Primality**: Miller-Rabin with deterministic witnesses for small numbers
- * - **GCD**: Euclidean algorithm with fast division
+ * - **GCD**: Euclidean algorithm with fast division (Knuth Algorithm D)
  *
  * ## Performance Considerations
  * - Operations reserve capacity to minimize reallocations
@@ -231,10 +231,119 @@ struct MontgomeryContext {
    * @brief Montgomery squaring: result = a^2 * R^(-1) mod N.
    * @param a Operand in Montgomery form.
    * @param[out] result Square in Montgomery form.
-   * @note Currently delegates to multiply(). Could be optimized with dedicated
-   *       squaring algorithm that exploits symmetry (a[i]*a[j] = a[j]*a[i]).
+   * @details Optimized squaring exploits symmetry: a[i]*a[j] = a[j]*a[i] for i≠j.
+   *          This reduces word multiplications from k² to ~k²/2 + k (diagonal terms
+   *          computed once, off-diagonal terms computed once and doubled).
    */
-  void square(const WordVec& a, WordVec& result) const { multiply(a, a, result); }
+  void square(const WordVec& a, WordVec& result) const {
+    std::vector<Word> t(2 * k_ + 1, 0);
+
+    computeOffDiagonalTerms(a, t);
+    doubleInPlace(t);
+    addDiagonalTerms(a, t);
+    montgomeryReduce(t);
+    extractResult(t, result);
+  }
+
+ private:
+  /**
+   * @brief Computes off-diagonal terms: sum of a[i]*a[j] for all i < j.
+   * @param a Input operand.
+   * @param[out] t Accumulator for partial products.
+   */
+  void computeOffDiagonalTerms(const WordVec& a, WordVec& t) const {
+    for (size_t i = 0; i < k_; ++i) {
+      DWord carry = 0;
+      for (size_t j = i + 1; j < k_; ++j) {
+        DWord product = static_cast<DWord>(a[i]) * a[j] + t[i + j] + carry;
+        t[i + j] = static_cast<Word>(product);
+        carry = product >> kBitsPerDigit;
+      }
+      propagateCarry(t, i + k_, carry);
+    }
+  }
+
+  /**
+   * @brief Doubles a multi-word integer in place (left shift by 1 bit).
+   * @param[in,out] t Value to double.
+   */
+  void doubleInPlace(WordVec& t) const {
+    DWord carry = 0;
+    for (size_t i = 0; i < t.size(); ++i) {
+      DWord doubled = (static_cast<DWord>(t[i]) << 1) | carry;
+      t[i] = static_cast<Word>(doubled);
+      carry = doubled >> kBitsPerDigit;
+    }
+  }
+
+  /**
+   * @brief Adds diagonal terms a[i]*a[i] to the accumulator.
+   * @param a Input operand.
+   * @param[in,out] t Accumulator (already contains doubled off-diagonal terms).
+   */
+  void addDiagonalTerms(const WordVec& a, WordVec& t) const {
+    DWord carry = 0;
+    for (size_t i = 0; i < k_; ++i) {
+      DWord product = static_cast<DWord>(a[i]) * a[i] + t[2 * i] + carry;
+      t[2 * i] = static_cast<Word>(product);
+      carry = product >> kBitsPerDigit;
+
+      DWord sum = static_cast<DWord>(t[2 * i + 1]) + carry;
+      t[2 * i + 1] = static_cast<Word>(sum);
+      carry = sum >> kBitsPerDigit;
+    }
+    if (carry != 0) {
+      t[2 * k_] += static_cast<Word>(carry);
+    }
+  }
+
+  /**
+   * @brief Propagates carry through higher words.
+   * @param[in,out] t Word vector to update.
+   * @param start_idx Starting index for propagation.
+   * @param carry Initial carry value.
+   */
+  void propagateCarry(WordVec& t, size_t start_idx, DWord carry) const {
+    for (size_t j = start_idx; carry != 0 && j < t.size(); ++j) {
+      DWord sum = static_cast<DWord>(t[j]) + carry;
+      t[j] = static_cast<Word>(sum);
+      carry = sum >> kBitsPerDigit;
+    }
+  }
+
+  /**
+   * @brief Performs Montgomery reduction on a 2k-word product.
+   * @param[in,out] t Product to reduce (modified in place).
+   */
+  void montgomeryReduce(WordVec& t) const {
+    for (size_t i = 0; i < k_; ++i) {
+      Word m = t[i] * n0_inv_;
+
+      DWord carry = 0;
+      for (size_t j = 0; j < k_; ++j) {
+        DWord product = static_cast<DWord>(m) * n_[j] + t[i + j] + carry;
+        t[i + j] = static_cast<Word>(product);
+        carry = product >> kBitsPerDigit;
+      }
+      propagateCarry(t, i + k_, carry);
+    }
+  }
+
+  /**
+   * @brief Extracts final result from reduced product.
+   * @param t Reduced product (words k..2k contain the result).
+   * @param[out] result Output in Montgomery form.
+   */
+  void extractResult(const WordVec& t, WordVec& result) const {
+    WordVec t_reduced(k_ + 1, 0);
+    for (size_t i = 0; i < k_; ++i) {
+      t_reduced[i] = t[k_ + i];
+    }
+    t_reduced[k_] = t[2 * k_];
+    conditionalSubtract(t_reduced, result);
+  }
+
+ public:
 
   /**
    * @brief Computes -N^(-1) mod 2^32 using Newton's method.
@@ -1817,6 +1926,10 @@ BigInt sqrt(const BigInt& value) {
   return x;
 }
 
+/// @brief Computes GCD using Euclidean algorithm with Knuth Algorithm D division.
+/// @details Binary GCD (Stein's Algorithm) is unsuitable here: it relies on cheap
+/// bit-shifts which are O(1) for native integers but O(n) for BigInt vectors.
+/// Euclidean with optimized division reduces operand size exponentially per iteration.
 BigInt gcd(BigInt a, BigInt b) {
   // Handle zero cases
   if (a == 0) {
@@ -1832,8 +1945,7 @@ BigInt gcd(BigInt a, BigInt b) {
   a.positive_ = true;
   b.positive_ = true;
 
-  // Euclidean algorithm using fast division (Knuth Algorithm D)
-  // Now that division is fast, this is efficient
+  // Euclidean algorithm with Knuth Algorithm D division
   while (b != 0) {
     BigInt r = a % b;
     a = std::move(b);

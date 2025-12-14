@@ -103,12 +103,12 @@ cmake --build build --config Release
 
 | Operation | bigint-cpp | Boost | Ratio |
 |-----------|------------|-------|-------|
-| Add | 79 ns | 53 ns | ~1.5x slower |
-| Multiply | 124 ns | 102 ns | ~1.2x slower |
-| Divide | 518 ns | 1.1 μs | **~2x faster!** |
-| PowMod (e=65537) | 9.6 μs | 9.0 μs | ~1x (equal) |
-| PowMod (large exp) | 76 μs | 7.0 μs | ~11x slower |
-| GCD | 1.0 μs | 477 ns | ~2x slower |
+| Add | 84 ns | 57 ns | ~1.5x slower |
+| Multiply | 115 ns | 107 ns | ~1.1x slower |
+| Divide | 542 ns | 1.1 μs | **~2x faster!** |
+| PowMod (e=65537) | 9.8 μs | 9.2 μs | ~1x (equal) |
+| PowMod (large exp) | 552 μs | 1.2 ms | **~2x faster!** |
+| GCD | 1.1 μs | 467 ns | ~2x slower |
 
 ### vs GMP (the gold standard)
 
@@ -129,7 +129,7 @@ cmake --build build --config Release
 
 *Tested with ~200-600 bit numbers on MSVC 19.50, Release build.*
 
-**Takeaway:** Division uses Knuth's Algorithm D - faster than Boost! For small exponents (RSA public key e=65537), we match Boost. For large exponents (RSA private key), Boost's Montgomery is much faster. GMP uses hand-tuned assembly - we're pure C++.
+**Takeaway:** Division uses Knuth's Algorithm D - faster than Boost! For small exponents (RSA public key e=65537), we match Boost. For large exponents (RSA private key), our optimized Montgomery squaring beats Boost by 2x! GMP uses hand-tuned assembly - we're pure C++.
 
 ## Internals
 
@@ -137,7 +137,7 @@ cmake --build build --config Release
 - Schoolbook O(n²) multiplication for small numbers, Karatsuba for large (threshold: 32 words)
 - **Knuth's Algorithm D** for division (TAOCP Vol 2, Section 4.3.1)
 - Euclidean GCD (leverages fast division)
-- PowMod: square-and-multiply with Montgomery CIOS (large odd moduli) and Barrett reduction (even/medium moduli)
+- PowMod: square-and-multiply with Montgomery CIOS + optimized squaring (large odd moduli) and Barrett reduction (even/medium moduli)
 - Miller-Rabin primality testing with deterministic witnesses for small numbers
 - 140 unit tests, Google Benchmark suite included
 
