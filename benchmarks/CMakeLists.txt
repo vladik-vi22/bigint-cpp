@@ -69,3 +69,42 @@ if(BIGINT_BUILD_COMPARISON_BENCHMARKS)
     )
 endif()
 
+
+# ============================================================================
+# GMP Comparison Benchmark (requires GMP to be installed)
+# ============================================================================
+option(BIGINT_BUILD_GMP_BENCHMARKS "Build comparison benchmarks vs GMP (requires GMP)" OFF)
+
+if(BIGINT_BUILD_GMP_BENCHMARKS)
+    # Try to find GMP - user must have it installed (e.g., via vcpkg, MSYS2, or system)
+    find_library(GMP_LIBRARY NAMES gmp libgmp mpir HINTS ENV GMP_ROOT)
+    find_path(GMP_INCLUDE_DIR NAMES gmp.h HINTS ENV GMP_ROOT)
+
+    if(GMP_LIBRARY AND GMP_INCLUDE_DIR)
+        message(STATUS "Found GMP: ${GMP_LIBRARY}")
+        message(STATUS "GMP include: ${GMP_INCLUDE_DIR}")
+
+        add_executable(bigint_gmp_benchmarks
+            bench_gmp.cpp
+        )
+
+        target_include_directories(bigint_gmp_benchmarks
+            PRIVATE
+                ${GMP_INCLUDE_DIR}
+        )
+
+        target_link_libraries(bigint_gmp_benchmarks
+            PRIVATE
+                bigint::bigint
+                ${GMP_LIBRARY}
+                benchmark::benchmark
+                benchmark::benchmark_main
+        )
+    else()
+        message(WARNING "GMP not found. Skipping GMP benchmarks.")
+        message(STATUS "To install GMP:")
+        message(STATUS "  - vcpkg: vcpkg install gmp:x64-windows")
+        message(STATUS "  - Ubuntu: sudo apt install libgmp-dev")
+        message(STATUS "  - macOS: brew install gmp")
+    endif()
+endif()
