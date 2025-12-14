@@ -93,7 +93,7 @@ ctest --test-dir build -C Release
 
 ## Benchmarks
 
-Run comparison benchmarks against Boost.Multiprecision:
+### vs Boost.Multiprecision
 
 ```bash
 cmake -B build -DBIGINT_BUILD_COMPARISON_BENCHMARKS=ON
@@ -101,15 +101,34 @@ cmake --build build --config Release
 ./build/benchmarks/bigint_comparison_benchmarks
 ```
 
-| Operation | bigint-cpp | Boost.Multiprecision | Notes |
-|-----------|------------|---------------------|-------|
+| Operation | bigint-cpp | Boost | Ratio |
+|-----------|------------|-------|-------|
 | Add | 76 ns | 59 ns | ~1.3x slower |
 | Multiply | 117 ns | 90 ns | ~1.3x slower |
-| Divide | 67 μs | 1 μs | Room for optimization |
-| PowMod | 462 μs | 9 μs | Room for optimization |
-| GCD | 9 μs | 0.5 μs | Room for optimization |
+| Divide | 67 μs | 1 μs | ~67x slower |
+| PowMod | 462 μs | 9 μs | ~51x slower |
+| GCD | 9 μs | 0.5 μs | ~18x slower |
+
+### vs GMP (the gold standard)
+
+```bash
+# Requires GMP: vcpkg install gmp:x64-windows (or apt install libgmp-dev)
+cmake -B build -DBIGINT_BUILD_GMP_BENCHMARKS=ON -DCMAKE_TOOLCHAIN_FILE=[vcpkg]/scripts/buildsystems/vcpkg.cmake
+cmake --build build --config Release
+./build/benchmarks/bigint_gmp_benchmarks
+```
+
+| Operation | bigint-cpp | GMP | Ratio |
+|-----------|------------|-----|-------|
+| Add | 77 ns | 10 ns | ~8x slower |
+| Multiply | 120 ns | 17 ns | ~7x slower |
+| Divide | 63 μs | 130 ns | ~480x slower |
+| PowMod | 453 μs | 487 ns | ~930x slower |
+| GCD | 8.8 μs | 158 ns | ~56x slower |
 
 *Tested with ~600-bit numbers on MSVC 19.50, Release build.*
+
+**Takeaway:** Addition/multiplication are competitive. Division and modular exponentiation have room for optimization (Newton-Raphson division, Montgomery multiplication). GMP uses hand-tuned assembly - we're pure C++.
 
 ## Internals
 
