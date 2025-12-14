@@ -631,78 +631,187 @@ std::pair<BigInt, BigInt> BigInt::DivMod(const BigInt& divisor) const {
     throw std::domain_error("Division by zero");
   }
 
-  const BigInt abs_divisor = abs(divisor);
-  const BigInt abs_dividend = abs(*this);
-  const size_t divisor_bit_len = abs_divisor.bitLength();
-
-  BigInt quotient;
-  quotient.digits_.reserve(digits_.size());
-
-  BigInt remainder = abs_dividend;
-
-  if (remainder < abs_divisor) {
-    // |dividend| < |divisor|, so quotient = 0
-    // For negative dividend with positive divisor, we need to adjust
+  // Handle signs at the end - work with absolute values
+  const int cmp = compareMagnitude(divisor);
+  if (cmp < 0) {
+    // |dividend| < |divisor|, quotient = 0, remainder = dividend
+    BigInt quotient;
+    BigInt remainder = *this;
+    remainder.positive_ = true;
     if (!positive_ && remainder != 0) {
-      // -a = -1 * b + (b - a) when 0 < a < b
-      quotient = BigInt(-1);
-      remainder = abs_divisor - remainder;
-      quotient.positive_ = !divisor.positive_;
-      return std::make_pair(quotient, remainder);
+      remainder.positive_ = false;
     }
-    remainder.positive_ = positive_;
+    return std::make_pair(quotient, remainder);
+  }
+  if (cmp == 0) {
+    // |dividend| == |divisor|, quotient = ±1, remainder = 0
+    BigInt quotient(1);
+    quotient.positive_ = (positive_ == divisor.positive_);
+    return std::make_pair(quotient, BigInt());
+  }
+
+  const size_t m = digits_.size();
+  const size_t n = divisor.digits_.size();
+
+  // Special case: single-word divisor - use fast path
+  if (n == 1) {
+    const uint32_t d = divisor.digits_[0];
+    BigInt quotient;
+    quotient.digits_.resize(m);
+    uint64_t carry = 0;
+    for (size_t i = m; i > 0; --i) {
+      uint64_t cur = carry * kDigitBase + digits_[i - 1];
+      quotient.digits_[i - 1] = static_cast<uint32_t>(cur / d);
+      carry = cur % d;
+    }
+    quotient.deleteZeroHighOrderDigit();
+    quotient.positive_ = (positive_ == divisor.positive_);
+    if (quotient.digits_.empty()) {
+      quotient.digits_.emplace_back(0);
+      quotient.positive_ = true;
+    }
+
+    BigInt remainder(static_cast<uint32_t>(carry));
+    if (!positive_ && remainder != 0) {
+      remainder.positive_ = false;
+    }
     return std::make_pair(quotient, remainder);
   }
 
-  BigInt shifted_divisor;
-  shifted_divisor.digits_.reserve(remainder.digits_.size());
+  // Knuth's Algorithm D (TAOCP Vol 2, Section 4.3.1)
+  // Divides u[0..m-1] by v[0..n-1] where m >= n >= 2
 
-  while (remainder >= abs_divisor) {
-    size_t bit_diff = remainder.bitLength() - divisor_bit_len;
-    shifted_divisor = abs_divisor << bit_diff;
+  // D1: Normalize - shift so that v[n-1] >= base/2
+  const uint32_t v_high = divisor.digits_[n - 1];
+  size_t shift = 0;
+  if (v_high != 0) {
+    // Count leading zeros using bit manipulation
+    uint32_t temp = v_high;
+    while ((temp & 0x80000000) == 0) {
+      ++shift;
+      temp <<= 1;
+    }
+  }
 
-    if (remainder < shifted_divisor) {
-      shifted_divisor >>= 1;
-      --bit_diff;
+  // Create normalized copies
+  std::vector<uint32_t> u(m + 1, 0);  // dividend with extra word
+  std::vector<uint32_t> v(n, 0);       // divisor
+
+  // Shift divisor left by 'shift' bits
+  if (shift == 0) {
+    for (size_t i = 0; i < n; ++i) {
+      v[i] = divisor.digits_[i];
+    }
+  } else {
+    uint32_t carry = 0;
+    for (size_t i = 0; i < n; ++i) {
+      uint32_t new_val = (divisor.digits_[i] << shift) | carry;
+      carry = divisor.digits_[i] >> (kBitsPerDigit - shift);
+      v[i] = new_val;
+    }
+  }
+
+  // Shift dividend left by 'shift' bits
+  if (shift == 0) {
+    for (size_t i = 0; i < m; ++i) {
+      u[i] = digits_[i];
+    }
+    u[m] = 0;
+  } else {
+    uint32_t carry = 0;
+    for (size_t i = 0; i < m; ++i) {
+      uint32_t new_val = (digits_[i] << shift) | carry;
+      carry = digits_[i] >> (kBitsPerDigit - shift);
+      u[i] = new_val;
+    }
+    u[m] = carry;
+  }
+
+  // D2-D7: Main loop - compute quotient digits from high to low
+  const size_t q_size = m - n + 1;
+  std::vector<uint32_t> q(q_size, 0);
+
+  const uint64_t v_n1 = v[n - 1];  // Most significant word of divisor
+  const uint64_t v_n2 = (n >= 2) ? v[n - 2] : 0;
+
+  for (size_t j = q_size; j > 0; --j) {
+    const size_t idx = j - 1;  // Current quotient position
+
+    // D3: Calculate trial quotient q_hat
+    const uint64_t u_high = (static_cast<uint64_t>(u[idx + n]) << kBitsPerDigit) + u[idx + n - 1];
+    uint64_t q_hat = u_high / v_n1;
+    uint64_t r_hat = u_high % v_n1;
+
+    // Refine q_hat using second digit
+    while (q_hat >= kDigitBase ||
+           q_hat * v_n2 > (r_hat << kBitsPerDigit) + u[idx + n - 2]) {
+      --q_hat;
+      r_hat += v_n1;
+      if (r_hat >= kDigitBase) {
+        break;
+      }
     }
 
-    remainder -= shifted_divisor;
-
-    // Create power of 2 directly
-    BigInt power_of_two;
-    const size_t word_idx = bit_diff >> kDigitShift;
-    const size_t bit_idx = bit_diff & kBitIndexMask;
-    power_of_two.digits_.resize(word_idx + 1, 0);
-    power_of_two.digits_[word_idx] = static_cast<uint32_t>(1) << bit_idx;
-    quotient += power_of_two;
-  }
-
-  // Now we have: |dividend| = quotient * |divisor| + remainder
-  // where 0 <= remainder < |divisor|
-
-  // Handle signs according to truncated division (C++ standard):
-  // dividend = quotient * divisor + remainder
-  // where remainder has the same sign as dividend (or is zero)
-
-  if (!positive_) {
-    // Negative dividend: -|dividend| = -quotient * |divisor| - remainder
-    // If remainder != 0, we need: -|dividend| = (-quotient - 1) * |divisor| + (|divisor| -
-    // remainder) But for truncated division (C++ standard), remainder has same sign as dividend So:
-    // quotient = -quotient, remainder = -remainder
-    if (remainder != 0) {
-      remainder.positive_ = false;
+    // D4: Multiply and subtract: u[idx..idx+n] -= q_hat * v[0..n-1]
+    int64_t borrow = 0;
+    for (size_t i = 0; i < n; ++i) {
+      uint64_t product = q_hat * v[i];
+      int64_t diff = static_cast<int64_t>(u[idx + i]) - static_cast<int64_t>(product & 0xFFFFFFFF) + borrow;
+      u[idx + i] = static_cast<uint32_t>(diff & 0xFFFFFFFF);
+      borrow = (diff >> kBitsPerDigit) - static_cast<int64_t>(product >> kBitsPerDigit);
     }
-    quotient.positive_ = false;
+    int64_t diff = static_cast<int64_t>(u[idx + n]) + borrow;
+    u[idx + n] = static_cast<uint32_t>(diff & 0xFFFFFFFF);
+
+    // D5: Test remainder - if negative, q_hat was too large
+    q[idx] = static_cast<uint32_t>(q_hat);
+    if (diff < 0) {
+      // D6: Add back - this happens rarely (probability ~2/base)
+      --q[idx];
+      uint64_t carry = 0;
+      for (size_t i = 0; i < n; ++i) {
+        uint64_t sum = static_cast<uint64_t>(u[idx + i]) + v[i] + carry;
+        u[idx + i] = static_cast<uint32_t>(sum & 0xFFFFFFFF);
+        carry = sum >> kBitsPerDigit;
+      }
+      u[idx + n] += static_cast<uint32_t>(carry);
+    }
   }
 
-  if (!divisor.positive_) {
-    // Negative divisor: flip quotient sign
-    quotient.positive_ = !quotient.positive_;
-  }
-
-  // Handle zero quotient sign
-  if (quotient == 0) {
+  // Build quotient
+  BigInt quotient;
+  quotient.digits_ = std::move(q);
+  quotient.deleteZeroHighOrderDigit();
+  quotient.positive_ = (positive_ == divisor.positive_);
+  if (quotient.digits_.empty()) {
+    quotient.digits_.emplace_back(0);
     quotient.positive_ = true;
+  }
+
+  // D8: Unnormalize remainder - shift right by 'shift' bits
+  BigInt remainder;
+  remainder.digits_.resize(n);
+  if (shift == 0) {
+    for (size_t i = 0; i < n; ++i) {
+      remainder.digits_[i] = u[i];
+    }
+  } else {
+    uint32_t carry = 0;
+    for (size_t i = n; i > 0; --i) {
+      uint32_t new_val = (u[i - 1] >> shift) | carry;
+      carry = u[i - 1] << (kBitsPerDigit - shift);
+      remainder.digits_[i - 1] = new_val;
+    }
+  }
+  remainder.deleteZeroHighOrderDigit();
+  remainder.positive_ = true;
+  if (remainder.digits_.empty()) {
+    remainder.digits_.emplace_back(0);
+  }
+
+  // Apply sign to remainder (C++ truncated division: remainder has same sign as dividend)
+  if (!positive_ && remainder != 0) {
+    remainder.positive_ = false;
   }
 
   return std::make_pair(quotient, remainder);
@@ -782,21 +891,6 @@ BigInt pow(const BigInt& base, const BigInt& exponent) {
 size_t log2(const BigInt& value) noexcept {
   return value.bitLength() - 1;
 }
-
-// Barrett reduction (commented out - kept for reference)
-// BigInt powmod(BigInt base, const BigInt& exponent, const BigInt& divisor) {
-//   BigInt power(1);
-//   power.digits_.reserve(divisor.digits_.size());
-//   const BigInt mu = power.shiftDigitsToHigh(divisor.digits_.size() * 2) / divisor;
-//   const uint32_t bit_len = exponent.bitLength();
-//   for (size_t bit_idx = 0; bit_idx < bit_len; ++bit_idx) {
-//     if (exponent.digits_[bit_idx >> 5] & (1 << (bit_idx & 31))) {
-//       power = barrettReduction(power * base, divisor, mu);
-//     }
-//     base = barrettReduction(base * base, divisor, mu);
-//   }
-//   return power;
-// }
 
 BigInt powmod(const BigInt& base, const BigInt& exponent, const BigInt& divisor) {
   if (divisor == 0) {
@@ -1642,18 +1736,6 @@ std::istream& operator>>(std::istream& in, BigInt& value) {
   value = BigInt(str);
   return in;
 }
-
-// BigInt barrettReduction(const BigInt& dividend, const BigInt& divisor, const BigInt& mu) {
-//   BigInt remainder = dividend - ((dividend.shiftDigitsToLow(divisor.digits_.size() - 1) * mu)
-//                                      .shiftDigitsToLow(divisor.digits_.size() + 1) *
-//                                  divisor);
-//
-//   while (remainder >= divisor) {
-//     remainder -= divisor;
-//   }
-//
-//   return remainder;
-// }
 
 // ============================================================================
 // Conversion Functions
