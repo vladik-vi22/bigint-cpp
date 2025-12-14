@@ -1,0 +1,146 @@
+﻿name: CI
+
+on:
+  push:
+    branches: [master, main, develop]
+  pull_request:
+    branches: [master, main, develop]
+
+jobs:
+  build:
+    name: ${{ matrix.os }} - ${{ matrix.compiler }} - ${{ matrix.build_type }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Windows MSVC
+          - os: windows-latest
+            compiler: msvc
+            build_type: Release
+            cmake_generator: "Visual Studio 17 2022"
+          - os: windows-latest
+            compiler: msvc
+            build_type: Debug
+            cmake_generator: "Visual Studio 17 2022"
+          
+          # Ubuntu GCC
+          - os: ubuntu-latest
+            compiler: gcc
+            build_type: Release
+            cc: gcc-13
+            cxx: g++-13
+          - os: ubuntu-latest
+            compiler: gcc
+            build_type: Debug
+            cc: gcc-13
+            cxx: g++-13
+          
+          # Ubuntu Clang
+          - os: ubuntu-latest
+            compiler: clang
+            build_type: Release
+            cc: clang-17
+            cxx: clang++-17
+          - os: ubuntu-latest
+            compiler: clang
+            build_type: Debug
+            cc: clang-17
+            cxx: clang++-17
+          
+          # macOS Clang
+          - os: macos-latest
+            compiler: clang
+            build_type: Release
+          - os: macos-latest
+            compiler: clang
+            build_type: Debug
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install GCC 13 (Ubuntu)
+        if: matrix.os == 'ubuntu-latest' && matrix.compiler == 'gcc'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-13 g++-13
+
+      - name: Install Clang 17 (Ubuntu)
+        if: matrix.os == 'ubuntu-latest' && matrix.compiler == 'clang'
+        run: |
+          wget https://apt.llvm.org/llvm.sh
+          chmod +x llvm.sh
+          sudo ./llvm.sh 17
+
+      - name: Configure CMake (Windows)
+        if: matrix.os == 'windows-latest'
+        run: |
+          cmake -B build -G "${{ matrix.cmake_generator }}" `
+            -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} `
+            -DBIGINT_BUILD_TESTS=ON `
+            -DBIGINT_BUILD_BENCHMARKS=ON
+
+      - name: Configure CMake (Unix)
+        if: matrix.os != 'windows-latest'
+        env:
+          CC: ${{ matrix.cc || 'clang' }}
+          CXX: ${{ matrix.cxx || 'clang++' }}
+        run: |
+          cmake -B build `
+            -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} `
+            -DBIGINT_BUILD_TESTS=ON `
+            -DBIGINT_BUILD_BENCHMARKS=ON
+
+      - name: Build
+        run: cmake --build build --config ${{ matrix.build_type }} --parallel
+
+      - name: Run Tests
+        run: ctest --test-dir build -C ${{ matrix.build_type }} --output-on-failure --parallel
+
+  clang-format:
+    name: Code Formatting
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install clang-format
+        run: |
+          wget https://apt.llvm.org/llvm.sh
+          chmod +x llvm.sh
+          sudo ./llvm.sh 17
+          sudo apt-get install -y clang-format-17
+
+      - name: Check formatting
+        run: |
+          find src include tests benchmarks -name '*.cpp' -o -name '*.hpp' | \
+            xargs clang-format-17 --dry-run --Werror
+
+  clang-tidy:
+    name: Static Analysis
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install tools
+        run: |
+          wget https://apt.llvm.org/llvm.sh
+          chmod +x llvm.sh
+          sudo ./llvm.sh 17
+          sudo apt-get install -y clang-tidy-17
+
+      - name: Configure CMake
+        env:
+          CC: clang-17
+          CXX: clang++-17
+        run: |
+          cmake -B build `
+            -DCMAKE_BUILD_TYPE=Debug `
+            -DCMAKE_EXPORT_COMPILE_COMMANDS=ON `
+            -DBIGINT_BUILD_TESTS=ON
+
+      - name: Run clang-tidy
+        run: |
+          clang-tidy-17 -p build src/BigInt.cpp --warnings-as-errors='*' 2>&1 | head -100 || true
