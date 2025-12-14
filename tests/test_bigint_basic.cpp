@@ -342,3 +342,36 @@ TEST_F(BigIntBasicTest, SpanConstructorLeadingZeros) {
   EXPECT_EQ(from_zeros.toStdString(16), "12345678");
   EXPECT_EQ(from_zeros.digitCount(), 1);  // Only one digit after normalization
 }
+
+TEST_F(BigIntBasicTest, ByteVectorCastOperator) {
+  // Test round-trip: bytes -> BigInt -> bytes
+  uint8_t original[] = {0xCA, 0xFE, 0xBA, 0xBE, 0x12, 0x34, 0x56, 0x78};
+  BigInt from_bytes(std::span<const uint8_t>{original});
+
+  // Cast back to vector<uint8_t>
+  auto bytes = static_cast<std::vector<uint8_t>>(from_bytes);
+
+  EXPECT_EQ(bytes.size(), 8);
+  EXPECT_EQ(bytes[0], 0xCA);
+  EXPECT_EQ(bytes[1], 0xFE);
+  EXPECT_EQ(bytes[2], 0xBA);
+  EXPECT_EQ(bytes[3], 0xBE);
+  EXPECT_EQ(bytes[4], 0x12);
+  EXPECT_EQ(bytes[5], 0x34);
+  EXPECT_EQ(bytes[6], 0x56);
+  EXPECT_EQ(bytes[7], 0x78);
+
+  // Test with non-aligned byte count (5 bytes)
+  uint8_t five_bytes[] = {0xAB, 0xCD, 0xEF, 0x12, 0x34};
+  BigInt from_five(std::span<const uint8_t>{five_bytes});
+  auto result = static_cast<std::vector<uint8_t>>(from_five);
+  EXPECT_EQ(result.size(), 5);
+  for (size_t i = 0; i < 5; ++i) {
+    EXPECT_EQ(result[i], five_bytes[i]);
+  }
+
+  // Test zero
+  BigInt zero;
+  auto zero_bytes = static_cast<std::vector<uint8_t>>(zero);
+  EXPECT_TRUE(zero_bytes.empty());
+}

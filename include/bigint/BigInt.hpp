@@ -109,6 +109,14 @@ class BigInt {
   /// @brief Modulo (remainder).
   /// @throws std::domain_error if divisor is zero.
   [[nodiscard]] BigInt operator%(const BigInt& divisor) const;
+
+  /// @brief Fast modulo with small divisor using Horner's method.
+  /// @details O(n) where n is number of 32-bit digits. No memory allocation.
+  /// @param divisor The divisor (must be > 0).
+  /// @return Remainder (always < divisor).
+  /// @throws std::domain_error if divisor is zero.
+  [[nodiscard]] uint32_t operator%(uint32_t divisor) const;
+
   /// @brief Modulo assignment.
   /// @throws std::domain_error if divisor is zero.
   BigInt& operator%=(const BigInt& divisor);
@@ -254,11 +262,9 @@ class BigInt {
   ///       with standard stream manipulators (std::hex, std::uppercase, etc.)
   [[nodiscard]] std::string toStdString(uint8_t base = kDefaultOutputBase) const;
 
-  /// @brief Convert to vector of 32-bit words (big-endian order).
-  [[nodiscard]] std::vector<uint32_t> toStdVectorUint32_t() const;
-
   /// @brief Convert to vector of bytes (big-endian order).
-  [[nodiscard]] std::vector<uint8_t> toStdVectorUint8_t() const;
+  /// @details Used for serialization, hashing, and crypto protocols.
+  [[nodiscard]] explicit operator std::vector<uint8_t>() const;
 
   [[nodiscard]] explicit operator uint64_t() const noexcept;  ///< Convert to uint64_t (truncates)
   [[nodiscard]] explicit operator uint32_t() const noexcept;  ///< Convert to uint32_t (truncates)
@@ -285,11 +291,6 @@ class BigInt {
   [[nodiscard]] bool isOdd() const noexcept;         ///< True if value is odd
   [[nodiscard]] bool isPositive() const noexcept;    ///< True if value >= 0
   [[nodiscard]] bool isNegative() const noexcept;    ///< True if value < 0
-
-  /// @brief Get const reference to internal digits (little-endian order).
-  /// @return Const reference to the internal digit vector.
-  /// @note This is provided for efficient hashing and serialization without allocation.
-  [[nodiscard]] const std::vector<uint32_t>& digits() const noexcept { return digits_; }
   /// @}
 
  private:
@@ -329,13 +330,12 @@ namespace std {
 template <>
 struct hash<bigint::BigInt> {
   size_t operator()(const bigint::BigInt& value) const noexcept {
-    // FNV-1a inspired hash combining sign and all digits
+    // FNV-1a inspired hash combining sign and bytes
     size_t h = 14695981039346656037ULL;  // FNV offset basis
     h ^= static_cast<size_t>(value.isNegative());
     h *= 1099511628211ULL;  // FNV prime
-    // Use digits() to avoid allocation (previously used toStdVectorUint32_t())
-    for (uint32_t digit : value.digits()) {
-      h ^= static_cast<size_t>(digit);
+    for (uint8_t byte : static_cast<std::vector<uint8_t>>(value)) {
+      h ^= static_cast<size_t>(byte);
       h *= 1099511628211ULL;
     }
     return h;

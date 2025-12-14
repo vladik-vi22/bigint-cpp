@@ -45,6 +45,39 @@ TEST_F(BigIntArithmeticTest, Modulo) {
   EXPECT_EQ(result.toStdString(10), "10");
 }
 
+TEST_F(BigIntArithmeticTest, ModuloUint32) {
+  // Small number
+  BigInt a("100", 10);
+  EXPECT_EQ(a % 30U, 10U);
+
+  // Large number spanning multiple 32-bit words
+  BigInt b("CAFEBABE12345678", 16);
+  // Verify against BigInt modulo
+  EXPECT_EQ(b % 17U, static_cast<uint32_t>(b % BigInt(17)));
+  EXPECT_EQ(b % 1000000007U, static_cast<uint32_t>(b % BigInt(1000000007)));
+
+  // Very large number (more than 64 bits)
+  BigInt c("CAFEBABECAFEBABE12345678", 16);
+  EXPECT_EQ(c % 17U, static_cast<uint32_t>(c % BigInt(17)));
+  EXPECT_EQ(c % 1000000007U, static_cast<uint32_t>(c % BigInt(1000000007)));
+
+  // Small primes (crypto use case)
+  BigInt prime_candidate("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141", 16);
+  EXPECT_EQ(prime_candidate % 3U, static_cast<uint32_t>(prime_candidate % BigInt(3)));
+  EXPECT_EQ(prime_candidate % 7U, static_cast<uint32_t>(prime_candidate % BigInt(7)));
+  EXPECT_EQ(prime_candidate % 113U, static_cast<uint32_t>(prime_candidate % BigInt(113)));
+
+  // Edge cases
+  BigInt zero;
+  EXPECT_EQ(zero % 17U, 0U);
+
+  BigInt one(1);
+  EXPECT_EQ(one % 17U, 1U);
+
+  // Division by zero should throw
+  EXPECT_THROW([[maybe_unused]] auto _ = a % 0U, std::domain_error);
+}
+
 TEST_F(BigIntArithmeticTest, Power) {
   BigInt base("2", 10);
   BigInt exp("10", 10);

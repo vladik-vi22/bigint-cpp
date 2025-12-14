@@ -652,6 +652,28 @@ BigInt BigInt::operator%(const BigInt& divisor) const {
   return DivMod(divisor).second;
 }
 
+uint32_t BigInt::operator%(const uint32_t divisor) const {
+  if (divisor == 0) {
+    throw std::domain_error("Division by zero");
+  }
+  if (digits_.empty() || isZero()) {
+    return 0;
+  }
+
+  // Horner's method: ((d[n-1] * B + d[n-2]) * B + ...) mod divisor
+  // where B = 2^32. Since divisor is 32-bit, remainder fits in 64-bit during computation.
+  const uint64_t base_mod = (static_cast<uint64_t>(1) << 32) % divisor;  // 2^32 mod divisor
+  uint64_t remainder = 0;
+
+  for (auto it = digits_.crbegin(); it != digits_.crend(); ++it) {
+    // remainder = (remainder * 2^32 + digit) mod divisor
+    // = (remainder * base_mod + digit) mod divisor (since remainder < divisor after each step)
+    remainder = (remainder * base_mod + *it) % divisor;
+  }
+
+  return static_cast<uint32_t>(remainder);
+}
+
 BigInt& BigInt::operator%=(const BigInt& divisor) {
   *this = DivMod(divisor).second;
   return *this;
@@ -1219,7 +1241,7 @@ bool BigInt::isProbablePrime(size_t rounds) const {
     if (*this == BigInt(p)) {
       return true;
     }
-    if ((*this % BigInt(p)).isZero()) {
+    if (*this % p == 0) {
       return false;
     }
   }
@@ -1330,7 +1352,7 @@ BigInt BigInt::randomPrime(size_t num_bits) {
       if (candidate == BigInt(p)) {
         return candidate;
       }
-      if ((candidate % BigInt(p)).isZero()) {
+      if (candidate % p == 0) {
         divisible = true;
         break;
       }
@@ -1371,7 +1393,7 @@ BigInt BigInt::nextPrime() const {
       if (candidate == BigInt(p)) {
         return candidate;
       }
-      if ((candidate % BigInt(p)).isZero()) {
+      if (candidate % p == 0) {
         divisible = true;
         break;
       }
@@ -1495,13 +1517,11 @@ std::string BigInt::toStdString(const uint8_t base) const {
   return result;
 }
 
-std::vector<uint32_t> BigInt::toStdVectorUint32_t() const {
-  std::vector<uint32_t> result = digits_;
-  std::reverse(result.begin(), result.end());
-  return result;
-}
+BigInt::operator std::vector<uint8_t>() const {
+  if (digits_.empty()) {
+    return {};  // Zero returns empty vector
+  }
 
-std::vector<uint8_t> BigInt::toStdVectorUint8_t() const {
   std::vector<uint8_t> result;
   size_t num_bytes = byteLength();
   result.reserve(num_bytes);
