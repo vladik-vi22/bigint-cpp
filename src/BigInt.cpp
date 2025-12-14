@@ -1409,37 +1409,29 @@ BigInt sqrt(const BigInt& value) {
 }
 
 BigInt gcd(BigInt a, BigInt b) {
-  if (!a) {
+  // Handle zero cases
+  if (a == 0) {
+    b.positive_ = true;
     return b;
-  } else if (!b) {
+  }
+  if (b == 0) {
+    a.positive_ = true;
     return a;
   }
 
-  BigInt result(1);
+  // Work with absolute values
   a.positive_ = true;
   b.positive_ = true;
 
-  while (a % 2 == 0 && b % 2 == 0) {
-    a >>= 1;
-    b >>= 1;
-    result <<= 1;
+  // Euclidean algorithm using fast division (Knuth Algorithm D)
+  // Now that division is fast, this is efficient
+  while (b != 0) {
+    BigInt r = a % b;
+    a = std::move(b);
+    b = std::move(r);
   }
 
-  while (a % 2 == 0) {
-    a >>= 1;
-  }
-
-  while (b) {
-    while (b % 2 == 0) {
-      b >>= 1;
-    }
-    BigInt temp = a;
-    a = min(a, b);
-    b = abs(temp - b);
-  }
-
-  result *= a;
-  return result;
+  return a;
 }
 
 BigInt lcm(const BigInt& a, const BigInt& b) {

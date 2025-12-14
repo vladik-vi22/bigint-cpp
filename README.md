@@ -24,7 +24,7 @@ A self-contained BigInt implementation extracted from a cryptography learning pr
 
 **Bitwise:** `~`, `&`, `|`, `^`, `<<`, `>>`, circular shifts
 
-**Number theory:** `gcd` (binary algorithm), `lcm`, `abs`, `isProbablePrime`, `nextPrime`, `randomPrime`
+**Number theory:** `gcd` (Euclidean algorithm), `lcm`, `abs`, `isProbablePrime`, `nextPrime`, `randomPrime`
 
 **Random:** `randomBits`, `randomBelow`
 
@@ -107,7 +107,7 @@ cmake --build build --config Release
 | Multiply | 112 ns | 91 ns | ~1.2x slower |
 | Divide | 526 ns | 1.1 μs | **~2x faster!** |
 | PowMod | 9.4 μs | 8.8 μs | ~1x (equal) |
-| GCD | 8.9 μs | 479 ns | ~18x slower |
+| GCD | 1.3 μs | 477 ns | ~2.7x slower |
 
 ### vs GMP (the gold standard)
 
@@ -124,18 +124,18 @@ cmake --build build --config Release
 | Multiply | 123 ns | 17 ns | ~7x slower |
 | Divide | 534 ns | 129 ns | ~4x slower |
 | PowMod | 9.4 μs | 493 ns | ~19x slower |
-| GCD | 8.8 μs | 157 ns | ~56x slower |
+| GCD | 1.2 μs | 157 ns | ~8x slower |
 
 *Tested with ~600-bit numbers on MSVC 19.50, Release build.*
 
-**Takeaway:** Division now uses Knuth's Algorithm D - competitive with Boost! Addition/multiplication are within 10x of GMP. PowMod could benefit from Montgomery multiplication. GMP uses hand-tuned assembly - we're pure C++.
+**Takeaway:** Division uses Knuth's Algorithm D - faster than Boost! GCD benefits from fast division. PowMod could benefit from Montgomery multiplication. GMP uses hand-tuned assembly - we're pure C++.
 
 ## Internals
 
 - `std::vector<uint32_t>` storage, little-endian, base 2³²
 - Schoolbook O(n²) multiplication for small numbers, Karatsuba for large (threshold: 32 words)
 - **Knuth's Algorithm D** for division (TAOCP Vol 2, Section 4.3.1)
-- Binary GCD (Stein's algorithm), square-and-multiply for powmod
+- Euclidean GCD (leverages fast division), square-and-multiply for powmod
 - Miller-Rabin primality testing with deterministic witnesses for small numbers
 - 122 unit tests, Google Benchmark suite included
 
