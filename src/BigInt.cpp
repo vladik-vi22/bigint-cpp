@@ -12,13 +12,15 @@
  *
  * ## Algorithms
  * - **Multiplication**: Schoolbook for small numbers, Karatsuba for large (threshold: 32 words)
- * - **Division**: Binary long division with bit-shifting optimization
+ * - **Division**: Knuth Algorithm D (multi-word long division with normalization)
+ * - **Modular Exponentiation**: Montgomery CIOS for large odd moduli, standard square-and-multiply otherwise
  * - **Primality**: Miller-Rabin with deterministic witnesses for small numbers
- * - **GCD**: Binary GCD (Stein's algorithm)
+ * - **GCD**: Euclidean algorithm with fast division
  *
  * ## Performance Considerations
  * - Operations reserve capacity to minimize reallocations
  * - Karatsuba multiplication reduces complexity from O(n²) to O(n^1.585)
+ * - Montgomery multiplication avoids expensive division in modular exponentiation
  * - Small prime sieve accelerates primality testing
  */
 
@@ -100,20 +102,273 @@ std::string decimalToBinaryString(std::string decimal_str) {
         std::stoul(decimal_str.substr(i * kDecimalCellSize, kDecimalCellSize), nullptr, 10)));
   }
 
-  // Repeated division by 2 to extract binary digits
-  const std::vector<uint32_t> zero_cells(cells.size(), 0);
-  while (cells != zero_cells) {
+  // Repeated division by 2 to extract binary digits (build in reverse, then flip)
+  while (!std::ranges::all_of(cells, [](uint32_t c) { return c == 0; })) {
     carry_next = 0;
     for (auto& cell : cells) {
       carry_current = carry_next;
       carry_next = (cell & 1);
       cell = (cell + carry_current * kDecimalBase) >> 1;
     }
-    binary_str.insert(binary_str.begin(), 1, carry_next ? '1' : '0');
+    binary_str.push_back(carry_next ? '1' : '0');
   }
 
+  std::ranges::reverse(binary_str);
   return binary_str;
 }
+
+// ============================================================================
+// Montgomery Arithmetic Helper (used exclusively by powmod)
+// ============================================================================
+
+/**
+ * @brief Montgomery multiplication context for modular exponentiation.
+ *
+ * @details Implements the CIOS (Coarsely Integrated Operand Scanning) algorithm
+ * which combines multiplication and reduction in a single pass, avoiding
+ * temporary BigInt allocations.
+ *
+ * Montgomery form: x̃ = x * R mod N, where R = 2^(32*k) and k = word count of N.
+ * Multiplication in Montgomery form: montMul(ã, b̃) = a*b*R mod N
+ *
+ * @note This struct is used exclusively by the `powmod` function for efficient
+ *       modular exponentiation with large odd moduli. Montgomery multiplication
+ *       replaces expensive division with cheaper addition/subtraction operations.
+ *
+ * @see "Handbook of Applied Cryptography", Chapter 14
+ * @see https://en.wikipedia.org/wiki/Montgomery_modular_multiplication
+ */
+struct MontgomeryContext {
+  /// 32-bit word type for internal representation.
+  using Word = uint32_t;
+  /// 64-bit double-word type for intermediate calculations.
+  using DWord = uint64_t;
+  /// Vector of words for multi-precision arithmetic.
+  using WordVec = std::vector<Word>;
+
+  /**
+   * @brief Constructs Montgomery context for given modulus.
+   * @param modulus Odd modulus N (must be odd for Montgomery to work).
+   * @pre modulus must be odd.
+   */
+  explicit MontgomeryContext(const WordVec& modulus)
+      : n_(modulus), k_(modulus.size()), scratch_(k_ + 2, 0) {
+    n0_inv_ = computeNegInverse(n_[0]);
+    r_squared_ = computeRSquared();
+  }
+
+  /// Number of words in the modulus.
+  [[nodiscard]] size_t wordCount() const noexcept { return k_; }
+
+  /**
+   * @brief Converts a value to Montgomery form: x̃ = x * R mod N.
+   * @param x Input value (must be < N, zero-padded to k words).
+   * @return x in Montgomery form.
+   */
+  [[nodiscard]] WordVec toMontgomery(const WordVec& x) const {
+    WordVec result(k_);
+    multiply(x, r_squared_, result);
+    return result;
+  }
+
+  /**
+   * @brief Converts from Montgomery form back to normal: x = x̃ * R^(-1) mod N.
+   * @param x_mont Value in Montgomery form.
+   * @return Normal representation.
+   */
+  [[nodiscard]] WordVec fromMontgomery(const WordVec& x_mont) const {
+    WordVec one(k_, 0);
+    one[0] = 1;
+    WordVec result(k_);
+    multiply(x_mont, one, result);
+    return result;
+  }
+
+  /**
+   * @brief Montgomery multiplication: result = a * b * R^(-1) mod N.
+   * @param a First operand in Montgomery form.
+   * @param b Second operand in Montgomery form.
+   * @param[out] result Product in Montgomery form.
+   */
+  void multiply(const WordVec& a, const WordVec& b, WordVec& result) const {
+    auto& t = scratch_;
+    std::ranges::fill(t, Word{0});
+
+    for (size_t i = 0; i < k_; ++i) {
+      // Step 1: t += a[i] * b
+      DWord carry = 0;
+      for (size_t j = 0; j < k_; ++j) {
+        DWord product = static_cast<DWord>(a[i]) * b[j] + t[j] + carry;
+        t[j] = static_cast<Word>(product);
+        carry = product >> kBitsPerDigit;
+      }
+      DWord sum = static_cast<DWord>(t[k_]) + carry;
+      t[k_] = static_cast<Word>(sum);
+      t[k_ + 1] = static_cast<Word>(sum >> kBitsPerDigit);
+
+      // Step 2: m = t[0] * (-N^(-1)) mod 2^32
+      Word m = t[0] * n0_inv_;
+
+      // Step 3: t = (t + m * N) >> 32  (divide by word base)
+      DWord mn0 = static_cast<DWord>(m) * n_[0] + t[0];
+      carry = mn0 >> kBitsPerDigit;
+      for (size_t j = 1; j < k_; ++j) {
+        DWord product = static_cast<DWord>(m) * n_[j] + t[j] + carry;
+        t[j - 1] = static_cast<Word>(product);
+        carry = product >> kBitsPerDigit;
+      }
+      sum = static_cast<DWord>(t[k_]) + carry;
+      t[k_ - 1] = static_cast<Word>(sum);
+      t[k_] = t[k_ + 1] + static_cast<Word>(sum >> kBitsPerDigit);
+      t[k_ + 1] = 0;
+    }
+
+    // Final reduction: if t >= N, subtract N
+    conditionalSubtract(t, result);
+  }
+
+  /**
+   * @brief Montgomery squaring: result = a^2 * R^(-1) mod N.
+   * @param a Operand in Montgomery form.
+   * @param[out] result Square in Montgomery form.
+   * @note Currently delegates to multiply(). Could be optimized with dedicated
+   *       squaring algorithm that exploits symmetry (a[i]*a[j] = a[j]*a[i]).
+   */
+  void square(const WordVec& a, WordVec& result) const { multiply(a, a, result); }
+
+  /**
+   * @brief Computes -N^(-1) mod 2^32 using Newton's method.
+   * @param n0 Least significant word of N (must be odd).
+   * @return The value -N^(-1) mod 2^32.
+   * @details Newton iteration: x_{i+1} = x_i * (2 - n0 * x_i)
+   *          Converges quadratically, reaching 32-bit precision in 5 iterations.
+   */
+  [[nodiscard]] static Word computeNegInverse(Word n0) noexcept {
+    // Newton's method converges to n0^(-1) mod 2^32 in 5 iterations
+    constexpr int kNewtonIterations = 5;
+    Word inv = 1;
+    for (int i = 0; i < kNewtonIterations; ++i) {
+      inv *= 2 - n0 * inv;
+    }
+    return static_cast<Word>(-static_cast<int32_t>(inv));
+  }
+
+  /**
+   * @brief Computes R^2 mod N for Montgomery conversion.
+   * @return R^2 mod N as a word vector.
+   */
+  [[nodiscard]] WordVec computeRSquared() const {
+    // R = 2^(32*k), so R^2 = 2^(64*k)
+    // We compute this by shifting 1 left by 64*k bits, then taking mod N
+    WordVec r2(2 * k_ + 1, 0);
+    r2[2 * k_] = 1;  // R^2 = 2^(64*k)
+
+    // Reduce R^2 mod N using repeated subtraction/shifting
+    // This is only done once during setup, so efficiency is less critical
+    return reduceModN(r2);
+  }
+
+  /**
+   * @brief Converts little-endian word vector to BigInt.
+   * @param words Little-endian word vector.
+   * @return BigInt representation (always positive).
+   */
+  [[nodiscard]] static BigInt wordVecToBigInt(const WordVec& words) {
+    // Reverse to big-endian for span constructor
+    WordVec big_endian(words.rbegin(), words.rend());
+
+    // Remove leading zeros using erase-remove idiom
+    auto first_nonzero = std::ranges::find_if(big_endian, [](Word w) { return w != 0; });
+    if (first_nonzero != big_endian.begin()) {
+      big_endian.erase(big_endian.begin(), first_nonzero);
+    }
+    if (big_endian.empty()) {
+      big_endian.push_back(0);
+    }
+
+    return BigInt(std::span<const Word>(big_endian), true);
+  }
+
+  /**
+   * @brief Converts BigInt to little-endian word vector.
+   * @param value BigInt to convert.
+   * @param target_size Desired size of output vector (padded with zeros).
+   * @return Little-endian word vector.
+   */
+  [[nodiscard]] static WordVec bigIntToWordVec(const BigInt& value, size_t target_size) {
+    // Get bytes in big-endian order
+    std::vector<uint8_t> bytes = static_cast<std::vector<uint8_t>>(value);
+
+    // Convert bytes to words (big-endian bytes -> little-endian words)
+    constexpr int kBitsPerByte = 8;
+    WordVec result(target_size, 0);
+    size_t byte_idx = bytes.size();
+    for (size_t word_idx = 0; word_idx < target_size && byte_idx > 0; ++word_idx) {
+      Word word = 0;
+      for (size_t shift = 0; shift < kBitsPerDigit && byte_idx > 0; shift += kBitsPerByte) {
+        word |= static_cast<Word>(bytes[--byte_idx]) << shift;
+      }
+      result[word_idx] = word;
+    }
+    return result;
+  }
+
+  /**
+   * @brief Reduces a large value modulo N.
+   * @param x Value to reduce (may be larger than N).
+   * @return x mod N.
+   * @note Uses BigInt's modulo operation internally. Only called during setup.
+   */
+  [[nodiscard]] WordVec reduceModN(const WordVec& x) const {
+    if (x.empty() || std::ranges::all_of(x, [](Word w) { return w == 0; })) {
+      return WordVec(k_, 0);
+    }
+
+    BigInt big_x = wordVecToBigInt(x);
+    BigInt big_n = wordVecToBigInt(n_);
+    BigInt result = big_x % big_n;
+
+    return bigIntToWordVec(result, k_);
+  }
+
+  /**
+   * @brief Conditionally subtracts N from t if t >= N.
+   * @param t Input value (k+1 words, may be >= N).
+   * @param[out] result Output value (k words, guaranteed < N).
+   */
+  void conditionalSubtract(const WordVec& t, WordVec& result) const {
+    // Check if t >= N (compare from high to low)
+    bool need_subtract = (t[k_] != 0);
+    if (!need_subtract) {
+      for (size_t i = k_; i-- > 0;) {
+        if (t[i] > n_[i]) {
+          need_subtract = true;
+          break;
+        }
+        if (t[i] < n_[i]) {
+          break;
+        }
+      }
+    }
+
+    if (need_subtract) {
+      DWord borrow = 0;
+      for (size_t i = 0; i < k_; ++i) {
+        DWord diff = static_cast<DWord>(t[i]) - n_[i] - borrow;
+        result[i] = static_cast<Word>(diff);
+        borrow = (diff >> 63) & 1;
+      }
+    } else {
+      std::ranges::copy_n(t.begin(), k_, result.begin());
+    }
+  }
+
+  WordVec n_;                    ///< Modulus N
+  size_t k_;                     ///< Word count of N
+  Word n0_inv_;                  ///< -N^(-1) mod 2^32
+  WordVec r_squared_;            ///< R^2 mod N for conversion to Montgomery form
+  mutable WordVec scratch_;      ///< Scratch buffer for CIOS algorithm
+};
 
 }  // anonymous namespace
 
@@ -928,74 +1183,48 @@ BigInt powmod(const BigInt& base, const BigInt& exponent, const BigInt& divisor)
     return result;
   }
 
-  // Montgomery exponentiation for odd modulus
-  const size_t k = divisor.digits_.size();
-
-  // Compute -n^(-1) mod 2^32 using Newton's method
-  uint32_t n_prime = 1;
-  for (int i = 0; i < 5; ++i) {
-    n_prime = n_prime * (2 - divisor.digits_[0] * n_prime);
-  }
-  n_prime = static_cast<uint32_t>(-static_cast<int32_t>(n_prime));
-
-  // Lambda for Montgomery reduction: T * R^(-1) mod N
-  auto montReduce = [&](BigInt t) -> BigInt {
-    t.digits_.resize(2 * k + 1, 0);
-
-    for (size_t i = 0; i < k; ++i) {
-      uint32_t m = t.digits_[i] * n_prime;
-      uint64_t carry = 0;
-      for (size_t j = 0; j < k; ++j) {
-        uint64_t product =
-            static_cast<uint64_t>(m) * divisor.digits_[j] + t.digits_[i + j] + carry;
-        t.digits_[i + j] = static_cast<uint32_t>(product);
-        carry = product >> 32;
-      }
-      for (size_t j = i + k; carry && j < t.digits_.size(); ++j) {
-        uint64_t sum = static_cast<uint64_t>(t.digits_[j]) + carry;
-        t.digits_[j] = static_cast<uint32_t>(sum);
-        carry = sum >> 32;
-      }
-    }
-
-    // Shift right by k words
-    BigInt result;
-    result.digits_.assign(t.digits_.begin() + k, t.digits_.end());
-    result.deleteZeroHighOrderDigit();
-
-    if (result >= divisor) {
-      result -= divisor;
-    }
-    return result;
-  };
-
-  // Lambda for Montgomery multiplication: a * b * R^(-1) mod N
-  auto montMul = [&](const BigInt& a, const BigInt& b) -> BigInt { return montReduce(a * b); };
-
-  // Compute R^2 mod N for converting to Montgomery form
-  BigInt r_squared(1);
-  r_squared <<= (64 * k);
-  r_squared = r_squared % divisor;
+  // Montgomery exponentiation using CIOS algorithm
+  MontgomeryContext mont(divisor.digits_);
+  const size_t k = mont.wordCount();
 
   // Convert base to Montgomery form
+  MontgomeryContext::WordVec base_vec(k, 0);
   BigInt base_mod = base % divisor;
-  BigInt base_mont = montReduce(base_mod * r_squared);
+  std::ranges::copy(base_mod.digits_, base_vec.begin());
+  auto base_mont = mont.toMontgomery(base_vec);
 
-  // result_mont = R mod N (Montgomery form of 1)
-  BigInt result_mont = montReduce(r_squared);
+  // Initialize result to 1 in Montgomery form
+  MontgomeryContext::WordVec one_vec(k, 0);
+  one_vec[0] = 1;
+  auto result_mont = mont.toMontgomery(one_vec);
 
-  // Square-and-multiply in Montgomery form
+  // Square-and-multiply in Montgomery form (left-to-right binary method)
+  MontgomeryContext::WordVec temp(k);
   const size_t bit_len = exponent.bitLength();
+
   for (size_t i = 0; i < bit_len; ++i) {
-    size_t bit_idx = bit_len - 1 - i;
-    result_mont = montMul(result_mont, result_mont);
-    if (exponent.digits_[bit_idx >> 5] & (1 << (bit_idx & 31))) {
-      result_mont = montMul(result_mont, base_mont);
+    const size_t bit_idx = bit_len - 1 - i;
+    const bool bit_set = exponent.digits_[bit_idx >> kDigitShift] & (1U << (bit_idx & kBitIndexMask));
+
+    // Square
+    mont.square(result_mont, temp);
+    std::swap(result_mont, temp);
+
+    // Multiply if bit is set
+    if (bit_set) {
+      mont.multiply(result_mont, base_mont, temp);
+      std::swap(result_mont, temp);
     }
   }
 
   // Convert back from Montgomery form
-  return montReduce(result_mont);
+  auto result_vec = mont.fromMontgomery(result_mont);
+
+  // Build result BigInt
+  BigInt result;
+  result.digits_ = std::move(result_vec);
+  result.deleteZeroHighOrderDigit();
+  return result;
 }
 
 BigInt inversemod(BigInt value, const BigInt& modulus) {

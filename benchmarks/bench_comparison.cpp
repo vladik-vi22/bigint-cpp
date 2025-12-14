@@ -138,14 +138,18 @@ BENCHMARK(BM_Boost_PowMod);
 // Modular Exponentiation - RSA Private Key Simulation (large exponent)
 // ============================================================================
 
-// Odd modulus for Montgomery algorithm testing
-static const std::string NUM_SMALL_ODD =
+// Large odd modulus for Montgomery algorithm testing (~1024 bits)
+static const std::string NUM_LARGE_ODD =
+    "1234567890123456789012345678901234567890123456789012345678901234567890"
+    "1234567890123456789012345678901234567890123456789012345678901234567890"
+    "1234567890123456789012345678901234567890123456789012345678901234567890"
+    "1234567890123456789012345678901234567890123456789012345678901234567890"
     "12345678901234567890123456789012345678901234567891";
 
 static void BM_BigInt_PowMod_LargeExp(benchmark::State& state) {
   BigInt base(NUM_SMALL);
   BigInt exp(NUM_SMALL);  // Large exponent (~200 bits) - simulates private key
-  BigInt mod(NUM_SMALL_ODD);  // Odd modulus - uses Montgomery
+  BigInt mod(NUM_LARGE_ODD);  // Large odd modulus - uses Montgomery CIOS
   for (auto _ : state) {
     BigInt result = powmod(base, exp, mod);
     benchmark::DoNotOptimize(result);
@@ -156,7 +160,7 @@ BENCHMARK(BM_BigInt_PowMod_LargeExp);
 static void BM_Boost_PowMod_LargeExp(benchmark::State& state) {
   cpp_int base(NUM_SMALL);
   cpp_int exp(NUM_SMALL);  // Large exponent (~200 bits)
-  cpp_int mod(NUM_SMALL_ODD);
+  cpp_int mod(NUM_LARGE_ODD);
   for (auto _ : state) {
     cpp_int result = powm(base, exp, mod);
     benchmark::DoNotOptimize(result);
