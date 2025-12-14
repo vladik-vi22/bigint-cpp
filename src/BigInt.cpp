@@ -21,10 +21,9 @@ constexpr uint8_t kDecimalCellSize = 9;         // Digits per decimal cell
 constexpr size_t kKaratsubaThreshold = 32;      // Threshold for Karatsuba multiplication
 
 // Small primes for quick divisibility rejection in prime generation
-constexpr auto kSmallPrimes = std::to_array<uint32_t>({
-    3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47,
-    53, 59, 61, 67, 71, 73, 79, 83, 89, 97, 101, 103, 107, 109, 113
-});
+constexpr auto kSmallPrimes =
+    std::to_array<uint32_t>({3,  5,  7,  11, 13, 17, 19, 23, 29, 31,  37,  41,  43,  47, 53,
+                             59, 61, 67, 71, 73, 79, 83, 89, 97, 101, 103, 107, 109, 113});
 
 /// Converts a decimal string to a binary string.
 /// Internal helper function for string constructor.
@@ -45,8 +44,7 @@ std::string DecimalToBinaryString(std::string decimal_str) {
   digits.reserve(num_cells);
   for (size_t i = 0; i < num_cells; ++i) {
     digits.emplace_back(static_cast<uint32_t>(
-        std::stoul(decimal_str.substr(i * kDecimalCellSize, kDecimalCellSize),
-                   nullptr, 10)));
+        std::stoul(decimal_str.substr(i * kDecimalCellSize, kDecimalCellSize), nullptr, 10)));
   }
   zero_arr.resize(digits.size(), 0);
   while (digits != zero_arr) {
@@ -63,14 +61,9 @@ std::string DecimalToBinaryString(std::string decimal_str) {
 
 }  // anonymous namespace
 
+BigInt::BigInt() : positive_(true), digits_() {}
 
-
-BigInt::BigInt() : positive_(true), digits_() {
-}
-
-BigInt::BigInt(const BigInt& other)
-    : positive_(other.positive_), digits_(other.digits_) {
-}
+BigInt::BigInt(const BigInt& other) : positive_(other.positive_), digits_(other.digits_) {}
 
 BigInt::BigInt(BigInt&& other) noexcept
     : positive_(other.positive_), digits_(std::move(other.digits_)) {
@@ -85,9 +78,8 @@ BigInt::BigInt(std::string str, const uint8_t base) {
     return;
   }
 
-  const uint8_t cell_size = base == kBaseHexadecimal
-                                ? (sizeof(uint32_t) * 2)
-                                : (sizeof(uint32_t) * 8);
+  const uint8_t cell_size =
+      base == kBaseHexadecimal ? (sizeof(uint32_t) * 2) : (sizeof(uint32_t) * 8);
   if (str[0] == '-') {
     positive_ = false;
     str.erase(0, 1);
@@ -115,10 +107,9 @@ BigInt::BigInt(std::string str, const uint8_t base) {
 
   for (size_t i = 0; i < str.size(); ++i) {
     if (!isValidChar(str[i])) {
-      throw std::invalid_argument(
-          "Invalid character '" + std::string(1, str[i]) +
-          "' at position " + std::to_string(i) +
-          " for base " + std::to_string(base));
+      throw std::invalid_argument("Invalid character '" + std::string(1, str[i]) +
+                                  "' at position " + std::to_string(i) + " for base " +
+                                  std::to_string(base));
     }
   }
 
@@ -131,11 +122,10 @@ BigInt::BigInt(std::string str, const uint8_t base) {
   size_t num_cells = str.length() / cell_size;
   digits_.reserve(num_cells);
   for (size_t i = 0; i < num_cells; ++i) {
-    digits_.emplace(
-        digits_.begin(),
-        static_cast<uint32_t>(std::stoul(
-            str.substr(i * cell_size, cell_size), nullptr,
-            base == kBaseHexadecimal ? kBaseHexadecimal : kBaseBinary)));
+    digits_.emplace(digits_.begin(),
+                    static_cast<uint32_t>(
+                        std::stoul(str.substr(i * cell_size, cell_size), nullptr,
+                                   base == kBaseHexadecimal ? kBaseHexadecimal : kBaseBinary)));
   }
 }
 
@@ -149,8 +139,7 @@ BigInt::BigInt(const std::vector<uint16_t>& vec, const bool is_positive_) {
   digits_.reserve(vec.size() & 1 ? (vec.size() >> 1) + 1 : vec.size() >> 1);
   auto it = vec.crbegin();
   for (size_t i = 0; i < (vec.size() >> 1); ++i) {
-    digits_.emplace_back(static_cast<uint32_t>(*it) |
-                         static_cast<uint32_t>(*(++it)) << 16);
+    digits_.emplace_back(static_cast<uint32_t>(*it) | static_cast<uint32_t>(*(++it)) << 16);
     ++it;
   }
   if (vec.size() & 1) {
@@ -164,19 +153,16 @@ BigInt::BigInt(const std::vector<uint8_t>& vec, const bool is_positive_) {
   digits_.reserve(vec.size() & 3 ? (vec.size() >> 2) + 1 : vec.size() >> 2);
   auto it = vec.crbegin();
   for (size_t i = 0; i < (vec.size() >> 2); ++i) {
-    digits_.emplace_back(static_cast<uint32_t>(*it) |
-                         static_cast<uint32_t>(*(++it)) << 8 |
+    digits_.emplace_back(static_cast<uint32_t>(*it) | static_cast<uint32_t>(*(++it)) << 8 |
                          static_cast<uint32_t>(*(++it)) << 16 |
                          static_cast<uint32_t>(*(++it)) << 24);
     ++it;
   }
   if ((vec.size() & 3) == 3) {
-    digits_.emplace_back(static_cast<uint32_t>(*it) |
-                         static_cast<uint32_t>(*(++it)) << 8 |
+    digits_.emplace_back(static_cast<uint32_t>(*it) | static_cast<uint32_t>(*(++it)) << 8 |
                          static_cast<uint32_t>(*(++it)) << 16);
   } else if ((vec.size() & 3) == 2) {
-    digits_.emplace_back(static_cast<uint32_t>(*it) |
-                         static_cast<uint32_t>(*(++it)) << 8);
+    digits_.emplace_back(static_cast<uint32_t>(*it) | static_cast<uint32_t>(*(++it)) << 8);
   } else if ((vec.size() & 3) == 1) {
     digits_.emplace_back(static_cast<uint32_t>(*it));
   }
@@ -208,19 +194,16 @@ BigInt::BigInt(const std::vector<bool>& vec, const bool is_positive_) {
   positive_ = is_positive_;
 }
 
-BigInt::BigInt(const uint64_t value, const bool is_positive_)
-    : positive_(is_positive_) {
+BigInt::BigInt(const uint64_t value, const bool is_positive_) : positive_(is_positive_) {
   digits_.reserve(2);
   digits_.emplace_back(static_cast<uint32_t>(value & UINT32_MAX));
   digits_.emplace_back(static_cast<uint32_t>(value >> 32));
 }
 
 BigInt::BigInt(const uint32_t value, const bool is_positive_)
-    : positive_(is_positive_), digits_{value} {
-}
+    : positive_(is_positive_), digits_{value} {}
 
-BigInt::BigInt(const int64_t value)
-    : positive_(value >= 0) {
+BigInt::BigInt(const int64_t value) : positive_(value >= 0) {
   const auto abs_value = static_cast<uint64_t>(std::abs(value));
   digits_.reserve(2);
   digits_.emplace_back(static_cast<uint32_t>(abs_value & UINT32_MAX));
@@ -228,8 +211,7 @@ BigInt::BigInt(const int64_t value)
 }
 
 BigInt::BigInt(const int32_t value)
-    : positive_(value >= 0), digits_{static_cast<uint32_t>(std::abs(value))} {
-}
+    : positive_(value >= 0), digits_{static_cast<uint32_t>(std::abs(value))} {}
 
 BigInt& BigInt::operator=(const BigInt& other) {
   if (this != &other) {
@@ -259,8 +241,7 @@ BigInt BigInt::operator+(const BigInt& addend) const {
     uint64_t temp_sum;
     const bool this_larger = (digits_.size() >= addend.digits_.size());
 
-    sum.digits_.reserve(this_larger ? digits_.size() + 1
-                                    : addend.digits_.size() + 1);
+    sum.digits_.reserve(this_larger ? digits_.size() + 1 : addend.digits_.size() + 1);
 
     auto larger_it = this_larger ? digits_.cbegin() : addend.digits_.cbegin();
     auto smaller_it = this_larger ? addend.digits_.cbegin() : digits_.cbegin();
@@ -268,8 +249,7 @@ BigInt BigInt::operator+(const BigInt& addend) const {
     auto smaller_end = this_larger ? addend.digits_.cend() : digits_.cend();
 
     while (smaller_it != smaller_end) {
-      temp_sum = static_cast<uint64_t>(*larger_it) +
-                 static_cast<uint64_t>(*smaller_it) +
+      temp_sum = static_cast<uint64_t>(*larger_it) + static_cast<uint64_t>(*smaller_it) +
                  static_cast<uint64_t>(carry);
       sum.digits_.emplace_back(static_cast<uint32_t>(temp_sum & UINT32_MAX));
       carry = static_cast<uint32_t>(temp_sum >> 32);
@@ -317,8 +297,7 @@ BigInt& BigInt::operator+=(const BigInt& addend) {
     uint32_t carry = 0;
     size_t i = 0;
     for (; i < addend.digits_.size(); ++i) {
-      uint64_t sum = static_cast<uint64_t>(digits_[i]) +
-                     static_cast<uint64_t>(addend.digits_[i]) +
+      uint64_t sum = static_cast<uint64_t>(digits_[i]) + static_cast<uint64_t>(addend.digits_[i]) +
                      static_cast<uint64_t>(carry);
       digits_[i] = static_cast<uint32_t>(sum & UINT32_MAX);
       carry = static_cast<uint32_t>(sum >> 32);
@@ -351,11 +330,8 @@ BigInt& BigInt::operator+=(const BigInt& addend) {
 
     for (size_t i = 0; i < larger->digits_.size(); ++i) {
       int64_t smaller_digit =
-          (i < smaller->digits_.size())
-              ? static_cast<int64_t>(smaller->digits_[i])
-              : 0;
-      int64_t diff =
-          static_cast<int64_t>(larger->digits_[i]) - smaller_digit - borrow;
+          (i < smaller->digits_.size()) ? static_cast<int64_t>(smaller->digits_[i]) : 0;
+      int64_t diff = static_cast<int64_t>(larger->digits_[i]) - smaller_digit - borrow;
       if (diff >= 0) {
         result[i] = static_cast<uint32_t>(diff);
         borrow = 0;
@@ -427,8 +403,7 @@ BigInt BigInt::operator-(const BigInt& subtrahend) const {
 
       while (subtrahend_it != subtrahend.digits_.cend()) {
         int64_t temp_diff = static_cast<int64_t>(*minuend_it) -
-                            static_cast<int64_t>(*subtrahend_it) -
-                            static_cast<int64_t>(borrow);
+                            static_cast<int64_t>(*subtrahend_it) - static_cast<int64_t>(borrow);
         if (temp_diff >= 0) {
           diff.digits_.emplace_back(static_cast<uint32_t>(temp_diff));
           borrow = 0;
@@ -442,8 +417,7 @@ BigInt BigInt::operator-(const BigInt& subtrahend) const {
       }
 
       while (minuend_it != digits_.cend()) {
-        int64_t temp_diff =
-            static_cast<int64_t>(*minuend_it) - static_cast<int64_t>(borrow);
+        int64_t temp_diff = static_cast<int64_t>(*minuend_it) - static_cast<int64_t>(borrow);
         if (temp_diff >= 0) {
           diff.digits_.emplace_back(static_cast<uint32_t>(temp_diff));
           borrow = 0;
@@ -524,9 +498,8 @@ BigInt BigInt::operator*(uint32_t multiplier) const {
   product.digits_.reserve(digits_.size() + 1);
 
   for (auto it = digits_.cbegin(); it != digits_.cend(); ++it) {
-    uint64_t temp_product =
-        static_cast<uint64_t>(*it) * static_cast<uint64_t>(multiplier) +
-        static_cast<uint64_t>(carry);
+    uint64_t temp_product = static_cast<uint64_t>(*it) * static_cast<uint64_t>(multiplier) +
+                            static_cast<uint64_t>(carry);
     product.digits_.emplace_back(static_cast<uint32_t>(temp_product & UINT32_MAX));
     carry = static_cast<uint32_t>(temp_product >> 32);
   }
@@ -850,8 +823,7 @@ BigInt BigInt::operator|(const BigInt& rhs) const {
     BigInt result;
     const bool this_larger = (digits_.size() >= rhs.digits_.size());
 
-    result.digits_.reserve(this_larger ? digits_.size() + 1
-                                       : rhs.digits_.size() + 1);
+    result.digits_.reserve(this_larger ? digits_.size() + 1 : rhs.digits_.size() + 1);
 
     auto larger_it = this_larger ? digits_.cbegin() : rhs.digits_.cbegin();
     auto smaller_it = this_larger ? rhs.digits_.cbegin() : digits_.cbegin();
@@ -890,8 +862,7 @@ BigInt BigInt::operator^(const BigInt& rhs) const {
     BigInt result;
     const bool this_larger = (digits_.size() >= rhs.digits_.size());
 
-    result.digits_.reserve(this_larger ? digits_.size() + 1
-                                       : rhs.digits_.size() + 1);
+    result.digits_.reserve(this_larger ? digits_.size() + 1 : rhs.digits_.size() + 1);
 
     auto larger_it = this_larger ? digits_.cbegin() : rhs.digits_.cbegin();
     auto smaller_it = this_larger ? rhs.digits_.cbegin() : digits_.cbegin();
@@ -975,15 +946,14 @@ BigInt BigInt::operator>>(size_t shift) const {
   result.digits_.reserve(remaining_digits);
 
   if (bit_shift == 0) {
-    result.digits_.insert(result.digits_.end(),
-                          digits_.begin() + static_cast<long>(digit_shift),
+    result.digits_.insert(result.digits_.end(), digits_.begin() + static_cast<long>(digit_shift),
                           digits_.end());
   } else {
     const uint32_t mask = static_cast<uint32_t>((1ULL << bit_shift) - 1);
     uint32_t carry = 0;
 
-    for (auto it = digits_.crbegin();
-         it != digits_.crend() - static_cast<long>(digit_shift); ++it) {
+    for (auto it = digits_.crbegin(); it != digits_.crend() - static_cast<long>(digit_shift);
+         ++it) {
       uint32_t shifted_digit = (*it >> bit_shift) | carry;
       carry = (*it & mask) << (32 - bit_shift);
       result.digits_.emplace_back(shifted_digit);
@@ -1046,11 +1016,15 @@ std::strong_ordering BigInt::operator<=>(const BigInt& rhs) const noexcept {
   const int mag_cmp = compareMagnitude(rhs);
 
   if (positive_) {
-    if (mag_cmp > 0) return std::strong_ordering::greater;
-    if (mag_cmp < 0) return std::strong_ordering::less;
+    if (mag_cmp > 0)
+      return std::strong_ordering::greater;
+    if (mag_cmp < 0)
+      return std::strong_ordering::less;
   } else {
-    if (mag_cmp > 0) return std::strong_ordering::less;
-    if (mag_cmp < 0) return std::strong_ordering::greater;
+    if (mag_cmp > 0)
+      return std::strong_ordering::less;
+    if (mag_cmp < 0)
+      return std::strong_ordering::greater;
   }
 
   return std::strong_ordering::equal;
@@ -1069,8 +1043,10 @@ int BigInt::compareMagnitude(const BigInt& other) const noexcept {
 
   for (auto left_it = digits_.crbegin(), right_it = other.digits_.crbegin();
        left_it != digits_.crend(); ++left_it, ++right_it) {
-    if (*left_it > *right_it) return 1;
-    if (*left_it < *right_it) return -1;
+    if (*left_it > *right_it)
+      return 1;
+    if (*left_it < *right_it)
+      return -1;
   }
 
   return 0;
@@ -1165,10 +1141,7 @@ void swap(BigInt& lhs, BigInt& rhs) noexcept {
 namespace {
 
 /// @brief Miller-Rabin witness test helper.
-bool millerRabinWitness(const BigInt& witness,
-                        const BigInt& d,
-                        size_t s,
-                        const BigInt& n) {
+bool millerRabinWitness(const BigInt& witness, const BigInt& d, size_t s, const BigInt& n) {
   const BigInt n_minus_1 = n - BigInt(1);
   BigInt x = powmod(witness, d, n);
 
@@ -1225,19 +1198,16 @@ bool BigInt::isProbablePrime(size_t rounds) const {
     return millerRabinWitness(BigInt(2), d, s, *this);
   }
   if (*this < BigInt(1373653)) {
-    return millerRabinWitness(BigInt(2), d, s, *this) &&
-           millerRabinWitness(BigInt(3), d, s, *this);
+    return millerRabinWitness(BigInt(2), d, s, *this) && millerRabinWitness(BigInt(3), d, s, *this);
   }
   if (*this < BigInt(25326001)) {
     return millerRabinWitness(BigInt(2), d, s, *this) &&
-           millerRabinWitness(BigInt(3), d, s, *this) &&
-           millerRabinWitness(BigInt(5), d, s, *this);
+           millerRabinWitness(BigInt(3), d, s, *this) && millerRabinWitness(BigInt(5), d, s, *this);
   }
   if (*this < BigInt(3215031751ULL)) {
     return millerRabinWitness(BigInt(2), d, s, *this) &&
            millerRabinWitness(BigInt(3), d, s, *this) &&
-           millerRabinWitness(BigInt(5), d, s, *this) &&
-           millerRabinWitness(BigInt(7), d, s, *this);
+           millerRabinWitness(BigInt(5), d, s, *this) && millerRabinWitness(BigInt(7), d, s, *this);
   }
 
   // Probabilistic for larger numbers
@@ -1351,8 +1321,7 @@ BigInt BigInt::nextPrime() const {
   }
 
   const size_t bits = candidate.bitLength();
-  const size_t max_iterations =
-      std::max(static_cast<size_t>(1000000), bits * bits * 100);
+  const size_t max_iterations = std::max(static_cast<size_t>(1000000), bits * bits * 100);
   size_t iterations = 0;
 
   while (iterations < max_iterations) {
@@ -1392,14 +1361,10 @@ std::istream& operator>>(std::istream& in, BigInt& value) {
   return in;
 }
 
-BigInt BarrettReduction(const BigInt& dividend,
-                        const BigInt& divisor,
-                        const BigInt& mu) {
-  BigInt remainder =
-      dividend -
-      ((dividend.shiftDigitsToLow(divisor.digits_.size() - 1) * mu)
-           .shiftDigitsToLow(divisor.digits_.size() + 1) *
-       divisor);
+BigInt BarrettReduction(const BigInt& dividend, const BigInt& divisor, const BigInt& mu) {
+  BigInt remainder = dividend - ((dividend.shiftDigitsToLow(divisor.digits_.size() - 1) * mu)
+                                     .shiftDigitsToLow(divisor.digits_.size() + 1) *
+                                 divisor);
 
   while (remainder >= divisor) {
     remainder -= divisor;
@@ -1429,8 +1394,7 @@ std::string BigInt::toStdString(uint8_t base) const {
     }
   } else {  // base == kBaseDecimal
     const BigInt decimal_repr = toBigIntDec();
-    for (auto it = decimal_repr.digits_.crbegin();
-         it != decimal_repr.digits_.crend(); ++it) {
+    for (auto it = decimal_repr.digits_.crbegin(); it != decimal_repr.digits_.crend(); ++it) {
       ss << std::dec << std::setw(9) << std::setfill('0') << *it;
     }
   }
@@ -1461,16 +1425,14 @@ std::vector<uint8_t> BigInt::toStdVectorUint8_t() const {
 
   if (partial_bytes) {
     for (size_t i = 0; i < partial_bytes; ++i) {
-      result.emplace_back(
-          static_cast<uint8_t>(*it >> ((partial_bytes - i - 1) * 8)));
+      result.emplace_back(static_cast<uint8_t>(*it >> ((partial_bytes - i - 1) * 8)));
     }
     ++it;
   }
 
   while (it != digits_.crend()) {
     for (uint8_t i = 0; i < sizeof(uint32_t); ++i) {
-      result.emplace_back(
-          static_cast<uint8_t>(*it >> ((sizeof(uint32_t) - i - 1) * 8)));
+      result.emplace_back(static_cast<uint8_t>(*it >> ((sizeof(uint32_t) - i - 1) * 8)));
     }
     ++it;
   }
@@ -1494,37 +1456,31 @@ BigInt::operator uint32_t() const noexcept {
 }
 
 BigInt::operator uint16_t() const noexcept {
-  return digits_.empty() ? static_cast<uint16_t>(0)
-                         : static_cast<uint16_t>(digits_.front());
+  return digits_.empty() ? static_cast<uint16_t>(0) : static_cast<uint16_t>(digits_.front());
 }
 
 BigInt::operator uint8_t() const noexcept {
-  return digits_.empty() ? static_cast<uint8_t>(0)
-                         : static_cast<uint8_t>(digits_.front());
+  return digits_.empty() ? static_cast<uint8_t>(0) : static_cast<uint8_t>(digits_.front());
 }
 
 BigInt::operator int64_t() const noexcept {
   const auto magnitude = static_cast<uint64_t>(*this);
-  return positive_ ? static_cast<int64_t>(magnitude)
-                   : -static_cast<int64_t>(magnitude);
+  return positive_ ? static_cast<int64_t>(magnitude) : -static_cast<int64_t>(magnitude);
 }
 
 BigInt::operator int32_t() const noexcept {
   const auto magnitude = static_cast<uint32_t>(*this);
-  return positive_ ? static_cast<int32_t>(magnitude)
-                   : -static_cast<int32_t>(magnitude);
+  return positive_ ? static_cast<int32_t>(magnitude) : -static_cast<int32_t>(magnitude);
 }
 
 BigInt::operator int16_t() const noexcept {
   const auto magnitude = static_cast<uint16_t>(*this);
-  return positive_ ? static_cast<int16_t>(magnitude)
-                   : -static_cast<int16_t>(magnitude);
+  return positive_ ? static_cast<int16_t>(magnitude) : -static_cast<int16_t>(magnitude);
 }
 
 BigInt::operator int8_t() const noexcept {
   const auto magnitude = static_cast<uint8_t>(*this);
-  return positive_ ? static_cast<int8_t>(magnitude)
-                   : -static_cast<int8_t>(magnitude);
+  return positive_ ? static_cast<int8_t>(magnitude) : -static_cast<int8_t>(magnitude);
 }
 
 BigInt::operator bool() const noexcept {
@@ -1623,8 +1579,7 @@ BigInt BigInt::shiftDigitsToLow(size_t shift) const {
   BigInt result = *this;
 
   if (result.digits_.size() > shift) {
-    result.digits_.erase(result.digits_.begin(),
-                         result.digits_.begin() + static_cast<long>(shift));
+    result.digits_.erase(result.digits_.begin(), result.digits_.begin() + static_cast<long>(shift));
   } else {
     result.digits_.shrink_to_fit();
     result.digits_.reserve(1);
@@ -1649,10 +1604,9 @@ BigInt BigInt::multiplySchoolbook(const BigInt& other) const {
   for (size_t i = 0; i < m; ++i) {
     uint64_t carry = 0;
     for (size_t j = 0; j < n; ++j) {
-      uint64_t product = static_cast<uint64_t>(digits_[i]) *
-                             static_cast<uint64_t>(other.digits_[j]) +
-                             static_cast<uint64_t>(result.digits_[i + j]) +
-                         carry;
+      uint64_t product =
+          static_cast<uint64_t>(digits_[i]) * static_cast<uint64_t>(other.digits_[j]) +
+          static_cast<uint64_t>(result.digits_[i + j]) + carry;
       result.digits_[i + j] = static_cast<uint32_t>(product & UINT32_MAX);
       carry = product >> 32;
     }
@@ -1684,12 +1638,10 @@ BigInt BigInt::multiplyKaratsuba(const BigInt& other) const {
     low1 = *this;
     low1.positive_ = true;
   } else {
-    low1.digits_.assign(digits_.begin(),
-                        digits_.begin() + static_cast<long>(half));
+    low1.digits_.assign(digits_.begin(), digits_.begin() + static_cast<long>(half));
     low1.positive_ = true;
     low1.deleteZeroHighOrderDigit();
-    high1.digits_.assign(digits_.begin() + static_cast<long>(half),
-                         digits_.end());
+    high1.digits_.assign(digits_.begin() + static_cast<long>(half), digits_.end());
     high1.positive_ = true;
     high1.deleteZeroHighOrderDigit();
   }
@@ -1700,12 +1652,10 @@ BigInt BigInt::multiplyKaratsuba(const BigInt& other) const {
     low2 = other;
     low2.positive_ = true;
   } else {
-    low2.digits_.assign(other.digits_.begin(),
-                        other.digits_.begin() + static_cast<long>(half));
+    low2.digits_.assign(other.digits_.begin(), other.digits_.begin() + static_cast<long>(half));
     low2.positive_ = true;
     low2.deleteZeroHighOrderDigit();
-    high2.digits_.assign(other.digits_.begin() + static_cast<long>(half),
-                         other.digits_.end());
+    high2.digits_.assign(other.digits_.begin() + static_cast<long>(half), other.digits_.end());
     high2.positive_ = true;
     high2.deleteZeroHighOrderDigit();
   }
@@ -1718,8 +1668,7 @@ BigInt BigInt::multiplyKaratsuba(const BigInt& other) const {
   BigInt sum2 = abs(low2) + abs(high2);
   BigInt z1 = sum1.multiplyKaratsuba(sum2) - z0 - z2;
 
-  BigInt result =
-      z2.shiftDigitsToHigh(2 * half) + z1.shiftDigitsToHigh(half) + z0;
+  BigInt result = z2.shiftDigitsToHigh(2 * half) + z1.shiftDigitsToHigh(half) + z0;
   result.positive_ = true;
   return result;
 }
@@ -1741,6 +1690,3 @@ BigInt BigInt::toBigIntDec() const {
 }
 
 }  // namespace bigint
-
-
-

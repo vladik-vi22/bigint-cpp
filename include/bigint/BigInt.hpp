@@ -46,10 +46,8 @@ class BigInt {
 
   /// @brief Construct from fixed-size array of 32-bit words (big-endian order).
   template <size_t N>
-  explicit BigInt(const std::array<uint32_t, N>& arr, bool is_positive = true) {
-    digits_ = std::vector<uint32_t>(arr.crbegin(), arr.crend());
-    positive_ = is_positive;
-  }
+  explicit BigInt(const std::array<uint32_t, N>& arr, bool is_positive = true)
+      : positive_(is_positive), digits_(arr.crbegin(), arr.crend()) {}
 
   /// @brief Construct from vector of 32-bit words (big-endian order).
   explicit BigInt(const std::vector<uint32_t>& vec, bool is_positive = true);
@@ -86,20 +84,20 @@ class BigInt {
 
   /// @name Arithmetic Operators
   /// @{
-  [[nodiscard]] BigInt operator+() const;                       ///< Unary plus
-  [[nodiscard]] BigInt operator+(const BigInt& addend) const;   ///< Addition
-  BigInt& operator+=(const BigInt& addend);                     ///< Addition assignment
-  BigInt& operator++();                                         ///< Pre-increment
-  BigInt operator++(int);                                       ///< Post-increment
+  [[nodiscard]] BigInt operator+() const;                      ///< Unary plus
+  [[nodiscard]] BigInt operator+(const BigInt& addend) const;  ///< Addition
+  BigInt& operator+=(const BigInt& addend);                    ///< Addition assignment
+  BigInt& operator++();                                        ///< Pre-increment
+  BigInt operator++(int);                                      ///< Post-increment
 
-  [[nodiscard]] BigInt operator-() const;                           ///< Unary minus (negation)
-  [[nodiscard]] BigInt operator-(const BigInt& subtrahend) const;   ///< Subtraction
-  BigInt& operator-=(const BigInt& subtrahend);                     ///< Subtraction assignment
-  BigInt& operator--();                                             ///< Pre-decrement
-  BigInt operator--(int);                                           ///< Post-decrement
+  [[nodiscard]] BigInt operator-() const;                          ///< Unary minus (negation)
+  [[nodiscard]] BigInt operator-(const BigInt& subtrahend) const;  ///< Subtraction
+  BigInt& operator-=(const BigInt& subtrahend);                    ///< Subtraction assignment
+  BigInt& operator--();                                            ///< Pre-decrement
+  BigInt operator--(int);                                          ///< Post-decrement
 
-  [[nodiscard]] BigInt operator*(const BigInt& multiplier) const;   ///< Multiplication
-  BigInt& operator*=(const BigInt& multiplier);                     ///< Multiplication assignment
+  [[nodiscard]] BigInt operator*(const BigInt& multiplier) const;  ///< Multiplication
+  BigInt& operator*=(const BigInt& multiplier);                    ///< Multiplication assignment
 
   /// @brief Integer division.
   /// @throws std::domain_error if divisor is zero.
@@ -121,49 +119,47 @@ class BigInt {
 
   /// @brief Compute base raised to exponent.
   /// @return base^exponent (0 if exponent is negative).
-  [[nodiscard]] friend BigInt pow(const BigInt& base, const BigInt& exponent);
+  friend BigInt pow(const BigInt& base, const BigInt& exponent);
 
   /// @brief Compute floor of log base 2.
-  /// @return floor(log2(antilogarithm)), or 0 if antilogarithm <= 0.
-  [[nodiscard]] friend size_t log2(const BigInt& antilogarithm) noexcept;
+  /// @return floor(log2(value)), or 0 if value <= 0.
+  friend size_t log2(const BigInt& value) noexcept;
 
-  /// @brief Compute (base^exponent) mod divisor efficiently.
-  /// @throws std::domain_error if divisor is zero.
-  [[nodiscard]] friend BigInt powmod(const BigInt& base, const BigInt& exponent,
-                                     const BigInt& divisor);
+  /// @brief Compute (base^exponent) mod modulus efficiently.
+  /// @throws std::domain_error if modulus is zero.
+  friend BigInt powmod(const BigInt& base, const BigInt& exponent, const BigInt& modulus);
 
   /// @brief Compute modular multiplicative inverse.
-  /// @return x such that (dividend * x) mod divisor == 1.
-  /// @throws std::domain_error if divisor is zero or inverse doesn't exist.
-  [[nodiscard]] friend BigInt inversemod(BigInt dividend, const BigInt& divisor);
+  /// @return x such that (value * x) mod modulus == 1.
+  /// @throws std::domain_error if modulus is zero or inverse doesn't exist.
+  friend BigInt inversemod(BigInt value, const BigInt& modulus);
 
-  /// @brief Check if dividend1 ≡ dividend2 (mod divisor).
-  /// @throws std::domain_error if divisor is zero.
-  [[nodiscard]] friend bool congruencemod(const BigInt& dividend1, const BigInt& dividend2,
-                                          const BigInt& divisor);
+  /// @brief Check if a ≡ b (mod modulus).
+  /// @throws std::domain_error if modulus is zero.
+  friend bool congruencemod(const BigInt& a, const BigInt& b, const BigInt& modulus);
 
   /// @brief Check if two numbers are coprime (gcd == 1).
-  [[nodiscard]] friend bool isCoprime(const BigInt& a, const BigInt& b);
+  friend bool isCoprime(const BigInt& a, const BigInt& b);
 
   /// @brief Compute Jacobi symbol (a/n).
   /// @return -1, 0, or 1 representing the Jacobi symbol.
-  [[nodiscard]] friend int8_t symbolJacobi(BigInt a, BigInt b);
+  friend int8_t symbolJacobi(BigInt a, BigInt n);
   /// @}
 
   /// @name Bitwise Operators
   /// @{
   [[nodiscard]] BigInt operator~() const;                   ///< Bitwise NOT
   [[nodiscard]] BigInt operator&(const BigInt& rhs) const;  ///< Bitwise AND
-  BigInt& operator&=(const BigInt& rhs);      ///< Bitwise AND assignment
+  BigInt& operator&=(const BigInt& rhs);                    ///< Bitwise AND assignment
   [[nodiscard]] BigInt operator|(const BigInt& rhs) const;  ///< Bitwise OR
-  BigInt& operator|=(const BigInt& rhs);      ///< Bitwise OR assignment
+  BigInt& operator|=(const BigInt& rhs);                    ///< Bitwise OR assignment
   [[nodiscard]] BigInt operator^(const BigInt& rhs) const;  ///< Bitwise XOR
-  BigInt& operator^=(const BigInt& rhs);      ///< Bitwise XOR assignment
+  BigInt& operator^=(const BigInt& rhs);                    ///< Bitwise XOR assignment
 
   [[nodiscard]] BigInt operator<<(size_t shift) const;  ///< Left shift
-  BigInt& operator<<=(size_t shift);      ///< Left shift assignment
+  BigInt& operator<<=(size_t shift);                    ///< Left shift assignment
   [[nodiscard]] BigInt operator>>(size_t shift) const;  ///< Right shift
-  BigInt& operator>>=(size_t shift);      ///< Right shift assignment
+  BigInt& operator>>=(size_t shift);                    ///< Right shift assignment
 
   /// @brief Circular left shift within current bit length.
   [[nodiscard]] BigInt leftCircularShift(size_t shift) const;
@@ -188,23 +184,23 @@ class BigInt {
   /// @name Utility Functions
   /// @{
   /// @brief Compute absolute value.
-  [[nodiscard]] friend BigInt abs(const BigInt& value);
+  friend BigInt abs(const BigInt& value);
 
   /// @brief Compute integer square root (floor).
   /// @throws std::domain_error if value is negative.
-  [[nodiscard]] friend BigInt sqrt(const BigInt& value);
+  friend BigInt sqrt(const BigInt& value);
 
   /// @brief Compute greatest common divisor.
-  [[nodiscard]] friend BigInt gcd(BigInt a, BigInt b);
+  friend BigInt gcd(BigInt a, BigInt b);
 
   /// @brief Compute least common multiple.
-  [[nodiscard]] friend BigInt lcm(const BigInt& a, const BigInt& b);
+  friend BigInt lcm(const BigInt& a, const BigInt& b);
 
   /// @brief Return the larger of two values.
-  [[nodiscard]] friend const BigInt& max(const BigInt& a, const BigInt& b) noexcept;
+  friend const BigInt& max(const BigInt& a, const BigInt& b) noexcept;
 
   /// @brief Return the smaller of two values.
-  [[nodiscard]] friend const BigInt& min(const BigInt& a, const BigInt& b) noexcept;
+  friend const BigInt& min(const BigInt& a, const BigInt& b) noexcept;
 
   /// @brief Swap two BigInt values.
   friend void swap(BigInt& lhs, BigInt& rhs) noexcept;
@@ -221,21 +217,21 @@ class BigInt {
   [[nodiscard]] bool isProbablePrime(size_t rounds = 16) const;
 
   /// @brief Generate a random BigInt with specified number of bits.
-  /// @param numBits Number of bits in the result.
-  /// @return Random BigInt in range [2^(numBits-1), 2^numBits - 1].
-  [[nodiscard]] static BigInt randomBits(size_t numBits);
+  /// @param num_bits Number of bits in the result.
+  /// @return Random BigInt in range [2^(num_bits-1), 2^num_bits - 1].
+  [[nodiscard]] static BigInt randomBits(size_t num_bits);
 
-  /// @brief Generate a random BigInt in range [0, max).
-  /// @param max Upper bound (exclusive).
-  /// @return Random BigInt in range [0, max).
-  [[nodiscard]] static BigInt randomBelow(const BigInt& max);
+  /// @brief Generate a random BigInt in range [0, upper_bound).
+  /// @param upper_bound Upper bound (exclusive).
+  /// @return Random BigInt in range [0, upper_bound).
+  [[nodiscard]] static BigInt randomBelow(const BigInt& upper_bound);
 
   /// @brief Generate a random prime number with specified bit length.
   /// @details Uses randomBits() to generate candidates, filters by small primes,
-  ///          then verifies with isProbablePrime(). Guaranteed to have exactly numBits bits.
-  /// @param numBits Number of bits in the result (must be >= 2).
-  /// @return Random prime with exactly numBits bits.
-  [[nodiscard]] static BigInt randomPrime(size_t numBits);
+  ///          then verifies with isProbablePrime(). Guaranteed to have exactly num_bits bits.
+  /// @param num_bits Number of bits in the result (must be >= 2).
+  /// @return Random prime with exactly num_bits bits.
+  [[nodiscard]] static BigInt randomPrime(size_t num_bits);
 
   /// @brief Find the next prime >= this value.
   /// @return Smallest prime >= *this.
@@ -265,11 +261,15 @@ class BigInt {
   [[nodiscard]] explicit operator uint32_t() const noexcept;  ///< Convert to uint32_t (truncates)
   [[nodiscard]] explicit operator uint16_t() const noexcept;  ///< Convert to uint16_t (truncates)
   [[nodiscard]] explicit operator uint8_t() const noexcept;   ///< Convert to uint8_t (truncates)
-  [[nodiscard]] explicit operator int64_t() const noexcept;   ///< Convert to int64_t (truncates, preserves sign)
-  [[nodiscard]] explicit operator int32_t() const noexcept;   ///< Convert to int32_t (truncates, preserves sign)
-  [[nodiscard]] explicit operator int16_t() const noexcept;   ///< Convert to int16_t (truncates, preserves sign)
-  [[nodiscard]] explicit operator int8_t() const noexcept;    ///< Convert to int8_t (truncates, preserves sign)
-  [[nodiscard]] explicit operator bool() const noexcept;      ///< True if non-zero
+  [[nodiscard]] explicit operator int64_t()
+      const noexcept;  ///< Convert to int64_t (truncates, preserves sign)
+  [[nodiscard]] explicit operator int32_t()
+      const noexcept;  ///< Convert to int32_t (truncates, preserves sign)
+  [[nodiscard]] explicit operator int16_t()
+      const noexcept;  ///< Convert to int16_t (truncates, preserves sign)
+  [[nodiscard]] explicit operator int8_t()
+      const noexcept;  ///< Convert to int8_t (truncates, preserves sign)
+  [[nodiscard]] explicit operator bool() const noexcept;  ///< True if non-zero
   /// @}
 
   /// @name Queries
@@ -290,8 +290,8 @@ class BigInt {
   /// @}
 
  private:
-  bool positive_;                   ///< Sign flag (true = positive or zero)
-  std::vector<uint32_t> digits_;    ///< Little-endian 32-bit word storage
+  bool positive_;                 ///< Sign flag (true = positive or zero)
+  std::vector<uint32_t> digits_;  ///< Little-endian 32-bit word storage
 
   /// @brief Compare magnitudes (absolute values) without allocation.
   /// @return -1 if |*this| < |other|, 0 if equal, 1 if |*this| > |other|
@@ -300,9 +300,8 @@ class BigInt {
   BigInt operator*(uint32_t multiplier) const;
   BigInt& operator*=(uint32_t multiplier);
   std::pair<BigInt, BigInt> DivMod(const BigInt& divisor) const;
-  friend BigInt BarrettReduction(const BigInt& dividend, const BigInt& divisor,
-                                 const BigInt& mu);
-  void alignTo(BigInt& aligned);
+  friend BigInt BarrettReduction(const BigInt& dividend, const BigInt& divisor, const BigInt& mu);
+  void alignTo(BigInt& other);
   void deleteZeroHighOrderDigit();
   BigInt shiftDigitsToHigh(size_t shift) const;
   BigInt shiftDigitsToLow(size_t shift) const;
