@@ -339,6 +339,71 @@ static void BM_BigInt_PowMod_PrivateKey_Montgomery(benchmark::State& state) {
 }
 BENCHMARK(BM_BigInt_PowMod_PrivateKey_Montgomery);
 
+// Barrett reduction benchmarks
+// Barrett: any modulus >= 4 words (128 bits), exponent >= 64 bits, not Montgomery
+static void BM_BigInt_PowMod_Barrett_EvenMod(benchmark::State& state) {
+  // 128-bit even modulus, 64-bit exponent -> Barrett
+  BigInt base("12345678901234567890123456789012345678901234567890", 10);
+  BigInt exp("18446744073709551617", 10);  // 2^64 + 1 (65 bits)
+  BigInt mod("340282366920938463463374607431768211456", 10);  // 2^128 (even)
+  for (auto _ : state) {
+    BigInt result = powmod(base, exp, mod);
+    benchmark::DoNotOptimize(result);
+  }
+}
+BENCHMARK(BM_BigInt_PowMod_Barrett_EvenMod);
+
+static void BM_BigInt_PowMod_Barrett_OddMod(benchmark::State& state) {
+  // 160-bit odd modulus (< 256 bits, so not Montgomery), 65-bit exponent -> Barrett
+  BigInt base("12345678901234567890123456789012345678901234567890", 10);
+  BigInt exp("18446744073709551617", 10);  // 2^64 + 1 (65 bits)
+  BigInt mod("1461501637330902918203684832716283019655932542983", 10);  // ~160 bits, odd
+  for (auto _ : state) {
+    BigInt result = powmod(base, exp, mod);
+    benchmark::DoNotOptimize(result);
+  }
+}
+BENCHMARK(BM_BigInt_PowMod_Barrett_OddMod);
+
+// Compare all three algorithms with similar workload
+static void BM_BigInt_PowMod_Compare_Standard(benchmark::State& state) {
+  // Small modulus (< 128 bits) -> Standard
+  BigInt base("12345678901234567890", 10);
+  BigInt exp("1000000007", 10);  // ~30 bits
+  BigInt mod("1000000007", 10);  // ~30 bits
+  for (auto _ : state) {
+    BigInt result = powmod(base, exp, mod);
+    benchmark::DoNotOptimize(result);
+  }
+}
+BENCHMARK(BM_BigInt_PowMod_Compare_Standard);
+
+static void BM_BigInt_PowMod_Compare_Barrett(benchmark::State& state) {
+  // 128-bit even modulus, 65-bit exponent -> Barrett
+  BigInt base("12345678901234567890", 10);
+  BigInt exp("18446744073709551617", 10);  // 65 bits
+  BigInt mod("340282366920938463463374607431768211456", 10);  // 2^128
+  for (auto _ : state) {
+    BigInt result = powmod(base, exp, mod);
+    benchmark::DoNotOptimize(result);
+  }
+}
+BENCHMARK(BM_BigInt_PowMod_Compare_Barrett);
+
+static void BM_BigInt_PowMod_Compare_Montgomery(benchmark::State& state) {
+  // 256-bit odd modulus, 17-bit exponent -> Montgomery
+  BigInt base("12345678901234567890", 10);
+  BigInt exp("65537", 10);  // 17 bits
+  BigInt mod(
+      "115792089237316195423570985008687907853269984665640564039457584007913129639935",
+      10);  // ~256 bits, odd
+  for (auto _ : state) {
+    BigInt result = powmod(base, exp, mod);
+    benchmark::DoNotOptimize(result);
+  }
+}
+BENCHMARK(BM_BigInt_PowMod_Compare_Montgomery);
+
 static void BM_BigInt_LeftShift_Huge(benchmark::State& state) {
   BigInt a(HUGE_1024);
   for (auto _ : state) {

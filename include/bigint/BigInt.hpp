@@ -282,7 +282,8 @@ class BigInt {
   /// @{
   [[nodiscard]] size_t bitLength() const noexcept;   ///< Number of bits (minimum 1 for zero)
   [[nodiscard]] size_t byteLength() const noexcept;  ///< Number of bytes needed
-                                                     /// @}
+  [[nodiscard]] bool testBit(size_t n) const noexcept;  ///< Test if bit at position n is set
+  /// @}
 
  private:
   bool positive_;                 ///< Sign flag (true = positive or zero)

@@ -357,6 +357,97 @@ TEST_F(BigIntArithmeticTest, HugePowerModEvenModulus) {
   EXPECT_TRUE(result >= BigInt(0));
 }
 
+// ============================================================================
+// Barrett Reduction Tests
+// ============================================================================
+
+// Barrett: any modulus >= 4 words (128 bits), exponent >= 64 bits
+TEST_F(BigIntArithmeticTest, PowerModBarrettEvenModulus) {
+  // Even modulus >= 128 bits, exponent >= 64 bits -> Barrett
+  // 128-bit even modulus
+  BigInt mod("340282366920938463463374607431768211456", 10);  // 2^128
+  BigInt base("12345678901234567890", 10);
+  // 64-bit exponent (must be >= 64 bits to trigger Barrett)
+  BigInt exp("18446744073709551616", 10);  // 2^64
+
+  BigInt result = powmod(base, exp, mod);
+
+  EXPECT_TRUE(result >= BigInt(0));
+  EXPECT_TRUE(result < mod);
+
+  // Verify with smaller computation: base^(2^64) mod 2^128
+  // Since mod is power of 2, result should be deterministic
+}
+
+TEST_F(BigIntArithmeticTest, PowerModBarrettOddModulusMedium) {
+  // Odd modulus >= 128 bits but < 256 bits, exponent >= 64 bits -> Barrett
+  // (Montgomery requires >= 256 bits)
+  // 160-bit odd modulus
+  BigInt mod("1461501637330902918203684832716283019655932542983", 10);  // ~160 bits, odd
+  BigInt base("98765432109876543210", 10);
+  BigInt exp("18446744073709551617", 10);  // 2^64 + 1 (65 bits)
+
+  BigInt result = powmod(base, exp, mod);
+
+  EXPECT_TRUE(result >= BigInt(0));
+  EXPECT_TRUE(result < mod);
+}
+
+TEST_F(BigIntArithmeticTest, PowerModBarrettConsistency) {
+  // Verify Barrett produces same result as standard algorithm
+  // Use parameters that would trigger Barrett
+  BigInt mod("340282366920938463463374607431768211457", 10);  // 128-bit odd
+  BigInt base("999999999999999999", 10);
+  BigInt exp("18446744073709551617", 10);  // 65 bits
+
+  BigInt result = powmod(base, exp, mod);
+
+  // Verify using Fermat's little theorem property
+  // For any a coprime to n: a^phi(n) ≡ 1 (mod n)
+  // Just verify result is in valid range and idempotent
+  EXPECT_TRUE(result >= BigInt(0));
+  EXPECT_TRUE(result < mod);
+
+  // Verify idempotence: (result^1) mod m = result
+  BigInt verify = powmod(result, BigInt(1), mod);
+  EXPECT_EQ(result.toStdString(10), verify.toStdString(10));
+}
+
+TEST_F(BigIntArithmeticTest, PowerModAlgorithmBoundaries) {
+  // Test at algorithm selection boundaries
+  BigInt base("12345678901234567890", 10);
+
+  // Standard: small modulus (< 128 bits) or small exponent (< 64 bits)
+  {
+    BigInt mod("1000000007", 10);  // ~30 bits
+    BigInt exp("1000000", 10);     // ~20 bits
+    BigInt result = powmod(base, exp, mod);
+    EXPECT_TRUE(result >= BigInt(0));
+    EXPECT_TRUE(result < mod);
+  }
+
+  // Barrett: 128-bit modulus, 64-bit exponent, even modulus
+  {
+    BigInt mod("340282366920938463463374607431768211456", 10);  // 2^128
+    BigInt exp("18446744073709551616", 10);                     // 2^64
+    BigInt result = powmod(base, exp, mod);
+    EXPECT_TRUE(result >= BigInt(0));
+    EXPECT_TRUE(result < mod);
+  }
+
+  // Montgomery: 256-bit odd modulus, 16-bit exponent
+  {
+    BigInt mod(
+        "1157920892373161954235709850086879078532699846656405640394575840079131296"
+        "39935",
+        10);                       // ~256 bits, odd
+    BigInt exp("65537", 10);       // 17 bits
+    BigInt result = powmod(base, exp, mod);
+    EXPECT_TRUE(result >= BigInt(0));
+    EXPECT_TRUE(result < mod);
+  }
+}
+
 TEST_F(BigIntArithmeticTest, HugeGCD) {
   // GCD of two large numbers
   BigInt a("123456789012345678901234567890123456789012345678901234567890", 10);

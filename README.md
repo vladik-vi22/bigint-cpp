@@ -22,7 +22,7 @@ A self-contained BigInt implementation extracted from a cryptography learning pr
 
 **Modular arithmetic:** `powmod`, `inversemod`, `congruencemod`, `isCoprime`, `symbolJacobi`
 
-**Bitwise:** `~`, `&`, `|`, `^`, `<<`, `>>`, circular shifts
+**Bitwise:** `~`, `&`, `|`, `^`, `<<`, `>>`, circular shifts, `testBit`
 
 **Number theory:** `gcd` (Euclidean algorithm), `lcm`, `abs`, `isProbablePrime`, `nextPrime`, `randomPrime`
 
@@ -137,9 +137,9 @@ cmake --build build --config Release
 - Schoolbook O(n²) multiplication for small numbers, Karatsuba for large (threshold: 32 words)
 - **Knuth's Algorithm D** for division (TAOCP Vol 2, Section 4.3.1)
 - Euclidean GCD (leverages fast division)
-- PowMod: square-and-multiply with Montgomery multiplication for large odd moduli
+- PowMod: square-and-multiply with Montgomery CIOS (large odd moduli) and Barrett reduction (even/medium moduli)
 - Miller-Rabin primality testing with deterministic witnesses for small numbers
-- 130 unit tests, Google Benchmark suite included
+- 140 unit tests, Google Benchmark suite included
 
 ## License
 

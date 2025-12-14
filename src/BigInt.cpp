@@ -372,6 +372,83 @@ struct MontgomeryContext {
 
 }  // anonymous namespace
 
+/**
+ * @brief Barrett reduction context for fast modular reduction.
+ *
+ * @details Barrett reduction replaces expensive division with multiplication
+ *          by precomputing a scaled reciprocal of the modulus. This is useful
+ *          when performing many modular operations with the same modulus.
+ *
+ *          Algorithm: To compute x mod n:
+ *          1. Precompute mu = floor(2^(2k) / n) where k = bitLength(n)
+ *          2. q = floor((x * mu) >> (2k))  (approximation of x / n)
+ *          3. r = x - q * n
+ *          4. While r >= n: r -= n  (at most 2 corrections needed)
+ *
+ *          Works for any modulus (unlike Montgomery which requires odd modulus).
+ *
+ * @see "Handbook of Applied Cryptography", Algorithm 14.42
+ */
+struct BarrettContext {
+  /**
+   * @brief Constructs Barrett context for given modulus.
+   * @param modulus The modulus n (must be > 0).
+   */
+  explicit BarrettContext(const BigInt& modulus) : n_(modulus), k_(modulus.bitLength()) {
+    // Compute mu = floor(2^(2k) / n)
+    // We compute 2^(2k) as BigInt(1) << (2*k), then divide by n
+    BigInt two_pow_2k = BigInt(1) << (2 * k_);
+    mu_ = two_pow_2k / n_;
+  }
+
+  /**
+   * @brief Computes x mod n using Barrett reduction.
+   * @param x Value to reduce (must be non-negative and < n^2).
+   * @return x mod n.
+   */
+  [[nodiscard]] BigInt reduce(const BigInt& x) const {
+    // For small x, just use regular modulo
+    if (x.bitLength() <= k_) {
+      if (x < n_) {
+        return x;
+      }
+      return x - n_;
+    }
+
+    // q = floor((x * mu) >> (2k))
+    BigInt q = (x * mu_) >> (2 * k_);
+
+    // r = x - q * n
+    BigInt r = x - q * n_;
+
+    // Correction: r may be slightly too large (at most 2n too large)
+    while (r >= n_) {
+      r -= n_;
+    }
+
+    // Handle negative case (shouldn't happen for valid input, but be safe)
+    while (r < BigInt(0)) {
+      r += n_;
+    }
+
+    return r;
+  }
+
+  /**
+   * @brief Computes (a * b) mod n using Barrett reduction.
+   * @param a First operand (should be < n).
+   * @param b Second operand (should be < n).
+   * @return (a * b) mod n.
+   */
+  [[nodiscard]] BigInt mulmod(const BigInt& a, const BigInt& b) const {
+    return reduce(a * b);
+  }
+
+  BigInt n_;     ///< The modulus
+  size_t k_;     ///< Bit length of modulus
+  BigInt mu_;    ///< Precomputed reciprocal: floor(2^(2k) / n)
+};
+
 // ============================================================================
 // Constructors
 // ============================================================================
@@ -1160,71 +1237,88 @@ BigInt powmod(const BigInt& base, const BigInt& exponent, const BigInt& divisor)
     return BigInt(0);
   }
 
-  // Montgomery multiplication requires odd modulus and benefits from larger numbers.
-  // For small moduli or even moduli, use standard square-and-multiply with fast division.
-  // Threshold: Montgomery is beneficial when modulus has >= 8 words (256 bits) AND
-  // exponent has >= 16 bits (enough operations to amortize setup cost).
-  // Note: RSA public exponent 65537 is 17 bits, so we use 16 as threshold.
-  const bool use_montgomery = (divisor.digits_[0] & 1) && divisor.digits_.size() >= 8 &&
-                              exponent.bitLength() >= 16;
+  // Algorithm selection criteria:
+  // - Montgomery: odd modulus, >= 8 words (256 bits), exponent >= 16 bits
+  // - Barrett: any modulus, >= 4 words (128 bits), exponent >= 64 bits
+  // - Standard: fallback for small numbers
+  const size_t mod_words = divisor.digits_.size();
+  const size_t exp_bits = exponent.bitLength();
+  const bool is_odd_modulus = divisor.digits_[0] & 1;
 
-  if (!use_montgomery) {
+  const bool use_montgomery = is_odd_modulus && mod_words >= 8 && exp_bits >= 16;
+  const bool use_barrett = !use_montgomery && mod_words >= 4 && exp_bits >= 64;
+
+  if (use_montgomery) {
+    // Montgomery CIOS (for large odd moduli)
+    MontgomeryContext mont(divisor.digits_);
+    const size_t k = mont.wordCount();
+
+    // Convert base to Montgomery form
+    MontgomeryContext::WordVec base_vec(k, 0);
+    BigInt base_mod = base % divisor;
+    std::ranges::copy(base_mod.digits_, base_vec.begin());
+    auto base_mont = mont.toMontgomery(base_vec);
+
+    // Initialize result to 1 in Montgomery form
+    MontgomeryContext::WordVec one_vec(k, 0);
+    one_vec[0] = 1;
+    auto result_mont = mont.toMontgomery(one_vec);
+
+    // Square-and-multiply in Montgomery form (left-to-right binary method)
+    MontgomeryContext::WordVec temp(k);
+
+    for (size_t i = 0; i < exp_bits; ++i) {
+      const size_t bit_idx = exp_bits - 1 - i;
+
+      // Square
+      mont.square(result_mont, temp);
+      std::swap(result_mont, temp);
+
+      // Multiply if bit is set
+      if (exponent.testBit(bit_idx)) {
+        mont.multiply(result_mont, base_mont, temp);
+        std::swap(result_mont, temp);
+      }
+    }
+
+    // Convert back from Montgomery form
+    auto result_vec = mont.fromMontgomery(result_mont);
+
+    // Build result BigInt
+    BigInt result;
+    result.digits_ = std::move(result_vec);
+    result.deleteZeroHighOrderDigit();
+    return result;
+
+  } else if (use_barrett) {
+    // Barrett reduction (for even moduli or medium-sized odd moduli)
+    BarrettContext barrett(divisor);
+    BigInt result(1);
+    BigInt b = barrett.reduce(base);
+
+    for (size_t i = 0; i < exp_bits; ++i) {
+      const size_t bit_idx = exp_bits - 1 - i;
+      result = barrett.mulmod(result, result);
+      if (exponent.testBit(bit_idx)) {
+        result = barrett.mulmod(result, b);
+      }
+    }
+    return result;
+
+  } else {
+    // Standard square-and-multiply (for small numbers)
     BigInt result(1);
     BigInt b = base % divisor;
-    const size_t bit_len = exponent.bitLength();
 
-    for (size_t i = 0; i < bit_len; ++i) {
-      size_t bit_idx = bit_len - 1 - i;
+    for (size_t i = 0; i < exp_bits; ++i) {
+      const size_t bit_idx = exp_bits - 1 - i;
       result = (result * result) % divisor;
-      if (exponent.digits_[bit_idx >> 5] & (1 << (bit_idx & 31))) {
+      if (exponent.testBit(bit_idx)) {
         result = (result * b) % divisor;
       }
     }
     return result;
   }
-
-  // Montgomery exponentiation using CIOS algorithm
-  MontgomeryContext mont(divisor.digits_);
-  const size_t k = mont.wordCount();
-
-  // Convert base to Montgomery form
-  MontgomeryContext::WordVec base_vec(k, 0);
-  BigInt base_mod = base % divisor;
-  std::ranges::copy(base_mod.digits_, base_vec.begin());
-  auto base_mont = mont.toMontgomery(base_vec);
-
-  // Initialize result to 1 in Montgomery form
-  MontgomeryContext::WordVec one_vec(k, 0);
-  one_vec[0] = 1;
-  auto result_mont = mont.toMontgomery(one_vec);
-
-  // Square-and-multiply in Montgomery form (left-to-right binary method)
-  MontgomeryContext::WordVec temp(k);
-  const size_t bit_len = exponent.bitLength();
-
-  for (size_t i = 0; i < bit_len; ++i) {
-    const size_t bit_idx = bit_len - 1 - i;
-    const bool bit_set = exponent.digits_[bit_idx >> kDigitShift] & (1U << (bit_idx & kBitIndexMask));
-
-    // Square
-    mont.square(result_mont, temp);
-    std::swap(result_mont, temp);
-
-    // Multiply if bit is set
-    if (bit_set) {
-      mont.multiply(result_mont, base_mont, temp);
-      std::swap(result_mont, temp);
-    }
-  }
-
-  // Convert back from Montgomery form
-  auto result_vec = mont.fromMontgomery(result_mont);
-
-  // Build result BigInt
-  BigInt result;
-  result.digits_ = std::move(result_vec);
-  result.deleteZeroHighOrderDigit();
-  return result;
 }
 
 BigInt inversemod(BigInt value, const BigInt& modulus) {
@@ -2172,6 +2266,15 @@ size_t BigInt::byteLength() const noexcept {
   }
 
   return len + high_bytes;
+}
+
+bool BigInt::testBit(size_t n) const noexcept {
+  const size_t word_idx = n >> kDigitShift;
+  if (word_idx >= digits_.size()) {
+    return false;
+  }
+  const size_t bit_idx = n & kBitIndexMask;
+  return (digits_[word_idx] >> bit_idx) & 1U;
 }
 
 // ============================================================================
