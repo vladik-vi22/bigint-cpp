@@ -75,6 +75,10 @@ class BigInt {
   /// @{
   BigInt& operator=(const BigInt& other);
   BigInt& operator=(BigInt&& other) noexcept;
+
+  /// @brief Assign from any integral type.
+  template <std::integral T>
+  BigInt& operator=(T value);
   /// @}
 
   /// @name Arithmetic Operators
@@ -105,16 +109,36 @@ class BigInt {
   /// @throws std::domain_error if divisor is zero.
   [[nodiscard]] BigInt operator%(const BigInt& divisor) const;
 
-  /// @brief Fast modulo with small divisor using Horner's method.
-  /// @details O(n) where n is number of 32-bit digits. No memory allocation.
-  /// @param divisor The divisor (must be > 0).
-  /// @return Remainder (always < divisor).
-  /// @throws std::domain_error if divisor is zero.
-  [[nodiscard]] uint32_t operator%(uint32_t divisor) const;
-
   /// @brief Modulo assignment.
   /// @throws std::domain_error if divisor is zero.
   BigInt& operator%=(const BigInt& divisor);
+
+  /// @brief Arithmetic with integral types.
+  /// @details Optimized implementations for uint64_t/int64_t, smaller types cast up.
+  ///          For modulo, uses fast Horner's method for types <= 32 bits.
+  /// @{
+  template <std::integral T>
+  [[nodiscard]] BigInt operator+(T rhs) const;
+  template <std::integral T>
+  [[nodiscard]] BigInt operator-(T rhs) const;
+  template <std::integral T>
+  [[nodiscard]] BigInt operator*(T rhs) const;
+  template <std::integral T>
+  [[nodiscard]] BigInt operator/(T rhs) const;
+  template <std::integral T>
+  [[nodiscard]] T operator%(T rhs) const;
+
+  template <std::integral T>
+  BigInt& operator+=(T rhs);
+  template <std::integral T>
+  BigInt& operator-=(T rhs);
+  template <std::integral T>
+  BigInt& operator*=(T rhs);
+  template <std::integral T>
+  BigInt& operator/=(T rhs);
+  template <std::integral T>
+  BigInt& operator%=(T rhs);
+  /// @}
   /// @}
 
   /// @name Mathematical Functions
@@ -285,7 +309,7 @@ class BigInt {
   [[nodiscard]] size_t byteLength() const noexcept;     ///< Number of bytes needed
   [[nodiscard]] bool testBit(size_t n) const noexcept;  ///< Test if bit at position n is set
   [[nodiscard]] size_t trailingZeros() const noexcept;  ///< Count trailing zero bits (0 for zero)
-                                                        /// @}
+  /// @}
 
  private:
   bool positive_;                 ///< Sign flag (true = positive or zero)
@@ -295,18 +319,15 @@ class BigInt {
   /// @return -1 if |*this| < |other|, 0 if equal, 1 if |*this| > |other|
   [[nodiscard]] int compareMagnitude(const BigInt& other) const noexcept;
 
-  BigInt operator*(uint32_t multiplier) const;
-  BigInt& operator*=(uint32_t multiplier);
-  std::pair<BigInt, BigInt> divmod(const BigInt& divisor) const;
-  std::pair<BigInt, BigInt> divmodSingleWord(uint32_t divisor, bool quotient_positive) const;
-  std::pair<BigInt, BigInt> divmodKnuth(const BigInt& divisor, size_t m, size_t n,
-                                        bool quotient_positive) const;
-  friend BigInt BarrettReduction(const BigInt& dividend, const BigInt& divisor, const BigInt& mu);
-  void alignTo(BigInt& other);
+  [[nodiscard]] std::pair<BigInt, BigInt> divmod(const BigInt& divisor) const;
+  [[nodiscard]] std::pair<BigInt, BigInt> divmodSingleWord(uint32_t divisor,
+                                                           bool quotient_positive) const;
+  [[nodiscard]] std::pair<BigInt, BigInt> divmodKnuth(const BigInt& divisor, size_t m, size_t n,
+                                                      bool quotient_positive) const;
   void deleteZeroHighOrderDigit();
-  BigInt shiftDigitsToHigh(size_t shift) const;
-  BigInt shiftDigitsToLow(size_t shift) const;
-  BigInt toBigIntDec() const;
+  [[nodiscard]] BigInt shiftDigitsToHigh(size_t shift) const;
+  [[nodiscard]] BigInt shiftDigitsToLow(size_t shift) const;
+  [[nodiscard]] BigInt toBigIntDec() const;
 
   /// @brief Toom-Cook 3-way multiplication for O(n^1.465) performance on large numbers.
   /// @param other The multiplier.
@@ -332,17 +353,37 @@ class BigInt {
   [[nodiscard]] std::strong_ordering compareToUnsigned(uint64_t rhs) const noexcept;
   [[nodiscard]] uint64_t toUint64() const noexcept;
   [[nodiscard]] int64_t toInt64() const noexcept;
+
+  // Integral arithmetic implementations (called by templates)
+  [[nodiscard]] BigInt addInt64(int64_t rhs) const;
+  [[nodiscard]] BigInt addUint64(uint64_t rhs) const;
+  [[nodiscard]] BigInt subInt64(int64_t rhs) const;
+  [[nodiscard]] BigInt subUint64(uint64_t rhs) const;
+  [[nodiscard]] BigInt mulInt64(int64_t rhs) const;
+  [[nodiscard]] BigInt mulUint64(uint64_t rhs) const;
+  [[nodiscard]] BigInt mulUint32(uint32_t rhs) const;  // used by mulUint64
+  [[nodiscard]] BigInt divInt64(int64_t rhs) const;
+  [[nodiscard]] BigInt divUint64(uint64_t rhs) const;
+  [[nodiscard]] int64_t modInt64(int64_t rhs) const;
+  [[nodiscard]] uint64_t modUint64(uint64_t rhs) const;
+  [[nodiscard]] uint32_t modUint32(uint32_t rhs) const;  // used by modUint64
 };
 
 // Template implementations
 
 template <std::integral T>
-BigInt::BigInt(T value) {
+BigInt::BigInt(T value) : positive_(true), digits_() {
   if constexpr (std::is_signed_v<T>) {
     initFromSigned(static_cast<int64_t>(value));
   } else {
     initFromUnsigned(static_cast<uint64_t>(value), true);
   }
+}
+
+template <std::integral T>
+BigInt& BigInt::operator=(T value) {
+  *this = BigInt(value);
+  return *this;
 }
 
 template <std::integral T>
@@ -366,6 +407,81 @@ BigInt::operator T() const noexcept {
   } else {
     return static_cast<T>(toUint64());
   }
+}
+
+template <std::integral T>
+BigInt BigInt::operator+(T rhs) const {
+  if constexpr (std::is_signed_v<T>) {
+    return addInt64(static_cast<int64_t>(rhs));
+  } else {
+    return addUint64(static_cast<uint64_t>(rhs));
+  }
+}
+
+template <std::integral T>
+BigInt BigInt::operator-(T rhs) const {
+  if constexpr (std::is_signed_v<T>) {
+    return subInt64(static_cast<int64_t>(rhs));
+  } else {
+    return subUint64(static_cast<uint64_t>(rhs));
+  }
+}
+
+template <std::integral T>
+BigInt BigInt::operator*(T rhs) const {
+  if constexpr (std::is_signed_v<T>) {
+    return mulInt64(static_cast<int64_t>(rhs));
+  } else {
+    return mulUint64(static_cast<uint64_t>(rhs));
+  }
+}
+
+template <std::integral T>
+BigInt BigInt::operator/(T rhs) const {
+  if constexpr (std::is_signed_v<T>) {
+    return divInt64(static_cast<int64_t>(rhs));
+  } else {
+    return divUint64(static_cast<uint64_t>(rhs));
+  }
+}
+
+template <std::integral T>
+T BigInt::operator%(T rhs) const {
+  if constexpr (std::is_signed_v<T>) {
+    return static_cast<T>(modInt64(static_cast<int64_t>(rhs)));
+  } else {
+    return static_cast<T>(modUint64(static_cast<uint64_t>(rhs)));
+  }
+}
+
+template <std::integral T>
+BigInt& BigInt::operator+=(T rhs) {
+  *this = *this + rhs;
+  return *this;
+}
+
+template <std::integral T>
+BigInt& BigInt::operator-=(T rhs) {
+  *this = *this - rhs;
+  return *this;
+}
+
+template <std::integral T>
+BigInt& BigInt::operator*=(T rhs) {
+  *this = *this * rhs;
+  return *this;
+}
+
+template <std::integral T>
+BigInt& BigInt::operator/=(T rhs) {
+  *this = *this / rhs;
+  return *this;
+}
+
+template <std::integral T>
+BigInt& BigInt::operator%=(T rhs) {
+  *this = *this % BigInt(rhs);
+  return *this;
 }
 
 }  // namespace bigint

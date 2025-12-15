@@ -7,3 +7,6 @@ build/
 
 # CMake
 CMakeUserPresets.json
+
+# Local build script
+build.bat

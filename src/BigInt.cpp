@@ -715,38 +715,6 @@ BigInt BigInt::operator--(int) {
   return old_value;
 }
 
-BigInt BigInt::operator*(uint32_t multiplier) const {
-  BigInt product;
-  uint32_t carry = 0;
-  product.digits_.reserve(digits_.size() + 1);
-
-  for (const auto& digit : digits_) {
-    uint64_t temp_product =
-        static_cast<uint64_t>(digit) * static_cast<uint64_t>(multiplier) + carry;
-    product.digits_.emplace_back(static_cast<uint32_t>(temp_product));
-    carry = static_cast<uint32_t>(temp_product >> kBitsPerDigit);
-  }
-
-  if (carry) {
-    product.digits_.emplace_back(carry);
-  }
-  product.positive_ = positive_;
-  return product;
-}
-
-BigInt& BigInt::operator*=(uint32_t multiplier) {
-  uint32_t carry = 0;
-  for (auto& digit : digits_) {
-    uint64_t product = static_cast<uint64_t>(digit) * multiplier + carry;
-    digit = static_cast<uint32_t>(product);
-    carry = static_cast<uint32_t>(product >> kBitsPerDigit);
-  }
-  if (carry) {
-    digits_.emplace_back(carry);
-  }
-  return *this;
-}
-
 BigInt BigInt::operator*(const BigInt& multiplier) const {
   if (*this == 0 || multiplier == 0) {
     return BigInt();
@@ -892,29 +860,6 @@ BigInt& BigInt::operator/=(const BigInt& divisor) {
 
 BigInt BigInt::operator%(const BigInt& divisor) const {
   return divmod(divisor).second;
-}
-
-uint32_t BigInt::operator%(const uint32_t divisor) const {
-  if (divisor == 0) {
-    throw std::domain_error("Division by zero");
-  }
-  // Direct zero check to avoid template recursion
-  if (digits_.empty() || (digits_.size() == 1 && digits_[0] == 0)) {
-    return 0;
-  }
-
-  // Horner's method: ((d[n-1] * B + d[n-2]) * B + ...) mod divisor
-  // where B = 2^32. We use the property that (a*B + b) mod m = ((a mod m)*B + b) mod m
-  // Since remainder < divisor < 2^32 and B = 2^32, remainder*B fits in 64 bits.
-  constexpr uint64_t base = kDigitBase;
-  uint64_t remainder = 0;
-
-  for (const auto& digit : std::views::reverse(digits_)) {
-    // remainder is already < divisor, so remainder * base fits in 64 bits
-    remainder = (remainder * base + digit) % divisor;
-  }
-
-  return static_cast<uint32_t>(remainder);
 }
 
 BigInt& BigInt::operator%=(const BigInt& divisor) {
@@ -1161,7 +1106,7 @@ int8_t symbolJacobi(BigInt a, BigInt n) {
 // ============================================================================
 
 BigInt BigInt::operator~() const {
-  return -*this - BigInt(1);
+  return -*this - 1;
 }
 
 BigInt BigInt::operator&(const BigInt& rhs) const {
@@ -1181,11 +1126,11 @@ BigInt BigInt::operator&(const BigInt& rhs) const {
     result.positive_ = true;
     return result;
   } else if (!positive_ && !rhs.positive_) {
-    return -(~*this | ~rhs) - BigInt(1);
+    return -(~*this | ~rhs) - 1;
   } else if (positive_ && !rhs.positive_) {
-    return (*this | ~rhs) + rhs + BigInt(1);
+    return (*this | ~rhs) + rhs + 1;
   } else {  // !positive_ && rhs.positive_
-    return (~*this | rhs) + *this + BigInt(1);
+    return (~*this | rhs) + *this + 1;
   }
 }
 
@@ -1220,7 +1165,7 @@ BigInt BigInt::operator|(const BigInt& rhs) const {
     result.positive_ = true;
     return result;
   } else if (!positive_ && !rhs.positive_) {
-    return -(~*this & ~rhs) - BigInt(1);
+    return -(~*this & ~rhs) - 1;
   } else if (positive_ && !rhs.positive_) {
     return (*this & ~rhs) + rhs;
   } else {  // !positive_ && rhs.positive_
@@ -1610,7 +1555,7 @@ namespace {
 
 /// @brief Miller-Rabin witness test helper.
 bool millerRabinWitness(const BigInt& witness, const BigInt& d, size_t s, const BigInt& n) {
-  const BigInt n_minus_1 = n - BigInt(1);
+  const BigInt n_minus_1 = n - 1;
   BigInt x = powmod(witness, d, n);
 
   if (x == 1 || x == n_minus_1) {
@@ -1654,7 +1599,7 @@ bool BigInt::isProbablePrime(size_t rounds) const {
   }
 
   // Write n-1 as 2^s * d where d is odd (using trailingZeros() instead of loop)
-  BigInt d = *this - BigInt(1);
+  BigInt d = *this - 1;
   const size_t s = d.trailingZeros();
   d >>= s;
 
@@ -1676,9 +1621,9 @@ bool BigInt::isProbablePrime(size_t rounds) const {
   }
 
   // Probabilistic for larger numbers
-  const BigInt n_minus_3 = *this - BigInt(3);
+  const BigInt n_minus_3 = *this - 3;
   for (size_t i = 0; i < rounds; ++i) {
-    BigInt witness = BigInt::randomBelow(n_minus_3) + BigInt(2);
+    BigInt witness = BigInt::randomBelow(n_minus_3) + 2;
     if (!millerRabinWitness(witness, d, s, *this)) {
       return false;
     }
@@ -1782,7 +1727,7 @@ BigInt BigInt::nextPrime() const {
 
   BigInt candidate = *this;
   if (candidate % 2 == 0) {
-    candidate += BigInt(1);
+    candidate = candidate + 1;
   }
 
   const size_t bits = candidate.bitLength();
@@ -1807,7 +1752,7 @@ BigInt BigInt::nextPrime() const {
       return candidate;
     }
 
-    candidate += BigInt(2);
+    candidate = candidate + 2;
   }
 
   throw std::runtime_error("nextPrime: exceeded maximum iterations");
@@ -2045,16 +1990,6 @@ size_t BigInt::trailingZeros() const noexcept {
 // Private Helper Methods
 // ============================================================================
 
-void BigInt::alignTo(BigInt& other) {
-  if (digits_.size() > other.digits_.size()) {
-    other.digits_.reserve(digits_.size());
-    other.digits_.resize(digits_.size(), 0);
-  } else if (other.digits_.size() > digits_.size()) {
-    digits_.reserve(other.digits_.size());
-    digits_.resize(other.digits_.size(), 0);
-  }
-}
-
 void BigInt::deleteZeroHighOrderDigit() {
   while (digits_.size() > 1 && !digits_.back()) {
     digits_.pop_back();
@@ -2062,6 +1997,136 @@ void BigInt::deleteZeroHighOrderDigit() {
   if (digits_.empty()) {
     digits_.push_back(0);
   }
+}
+
+BigInt BigInt::mulUint32(uint32_t multiplier) const {
+  BigInt product;
+  uint32_t carry = 0;
+  product.digits_.reserve(digits_.size() + 1);
+
+  for (const auto& digit : digits_) {
+    uint64_t temp_product =
+        static_cast<uint64_t>(digit) * static_cast<uint64_t>(multiplier) + carry;
+    product.digits_.emplace_back(static_cast<uint32_t>(temp_product));
+    carry = static_cast<uint32_t>(temp_product >> kBitsPerDigit);
+  }
+
+  if (carry) {
+    product.digits_.emplace_back(carry);
+  }
+  product.positive_ = positive_;
+  return product;
+}
+
+uint32_t BigInt::modUint32(uint32_t divisor) const {
+  if (divisor == 0) {
+    throw std::domain_error("Division by zero");
+  }
+  // Direct zero check to avoid template recursion
+  if (digits_.empty() || (digits_.size() == 1 && digits_[0] == 0)) {
+    return 0;
+  }
+
+  // Horner's method: ((d[n-1] * B + d[n-2]) * B + ...) mod divisor
+  // where B = 2^32. We use the property that (a*B + b) mod m = ((a mod m)*B + b) mod m
+  // Since remainder < divisor < 2^32 and B = 2^32, remainder*B fits in 64 bits.
+  constexpr uint64_t base = kDigitBase;
+  uint64_t remainder = 0;
+
+  for (const auto& digit : std::views::reverse(digits_)) {
+    // remainder is already < divisor, so remainder * base fits in 64 bits
+    remainder = (remainder * base + digit) % divisor;
+  }
+
+  return static_cast<uint32_t>(remainder);
+}
+
+BigInt BigInt::addUint64(uint64_t rhs) const {
+  return *this + BigInt(rhs);
+}
+
+BigInt BigInt::subUint64(uint64_t rhs) const {
+  return *this - BigInt(rhs);
+}
+
+BigInt BigInt::mulUint64(uint64_t rhs) const {
+  if (rhs <= std::numeric_limits<uint32_t>::max()) {
+    return mulUint32(static_cast<uint32_t>(rhs));
+  }
+  // Multiply by low and high 32-bit parts separately, then combine
+  const uint32_t lo = static_cast<uint32_t>(rhs);
+  const uint32_t hi = static_cast<uint32_t>(rhs >> 32);
+  BigInt result = mulUint32(lo);
+  BigInt high_part = mulUint32(hi);
+  high_part = high_part.shiftDigitsToHigh(1);  // Shift left by 32 bits
+  result += high_part;
+  return result;
+}
+
+BigInt BigInt::divUint64(uint64_t rhs) const {
+  return *this / BigInt(rhs);
+}
+
+uint64_t BigInt::modUint64(uint64_t rhs) const {
+  if (rhs == 0) {
+    throw std::domain_error("Division by zero");
+  }
+  if (!*this) {
+    return 0;
+  }
+  if (rhs <= std::numeric_limits<uint32_t>::max()) {
+    return modUint32(static_cast<uint32_t>(rhs));
+  }
+  // For 64-bit divisor, fall back to BigInt division
+  return static_cast<uint64_t>((*this % BigInt(rhs)));
+}
+
+BigInt BigInt::addInt64(int64_t rhs) const {
+  if (rhs >= 0) {
+    return addUint64(static_cast<uint64_t>(rhs));
+  }
+  return subUint64(static_cast<uint64_t>(-rhs));
+}
+
+BigInt BigInt::subInt64(int64_t rhs) const {
+  if (rhs >= 0) {
+    return subUint64(static_cast<uint64_t>(rhs));
+  }
+  return addUint64(static_cast<uint64_t>(-rhs));
+}
+
+BigInt BigInt::mulInt64(int64_t rhs) const {
+  if (rhs >= 0) {
+    return mulUint64(static_cast<uint64_t>(rhs));
+  }
+  BigInt result = mulUint64(static_cast<uint64_t>(-rhs));
+  result.positive_ = !result.positive_;
+  if (!result) {
+    result.positive_ = true;
+  }
+  return result;
+}
+
+BigInt BigInt::divInt64(int64_t rhs) const {
+  if (rhs >= 0) {
+    return divUint64(static_cast<uint64_t>(rhs));
+  }
+  BigInt result = divUint64(static_cast<uint64_t>(-rhs));
+  result.positive_ = !result.positive_;
+  if (!result) {
+    result.positive_ = true;
+  }
+  return result;
+}
+
+int64_t BigInt::modInt64(int64_t rhs) const {
+  if (rhs == 0) {
+    throw std::domain_error("Division by zero");
+  }
+  uint64_t abs_rhs = rhs >= 0 ? static_cast<uint64_t>(rhs) : static_cast<uint64_t>(-rhs);
+  uint64_t abs_rem = modUint64(abs_rhs);
+  // Remainder has same sign as dividend
+  return positive_ ? static_cast<int64_t>(abs_rem) : -static_cast<int64_t>(abs_rem);
 }
 
 BigInt BigInt::shiftDigitsToHigh(size_t shift) const {
@@ -2197,14 +2262,14 @@ BigInt BigInt::multiplyToom3(const BigInt& other) const {
   const BigInt c4 = r_inf;
 
   // r_1 + r_m1 = 2*(c0 + c2 + c4), r_1 - r_m1 = 2*(c1 + c3)
-  const BigInt sum_even = (r_1 + r_m1) / BigInt(2);  // c0 + c2 + c4
-  const BigInt sum_odd = (r_1 - r_m1) / BigInt(2);   // c1 + c3
+  const BigInt sum_even = (r_1 + r_m1) / 2;  // c0 + c2 + c4
+  const BigInt sum_odd = (r_1 - r_m1) / 2;   // c1 + c3
   const BigInt c2 = sum_even - c0 - c4;
 
   // Use r_2 to separate c1 and c3:
   // r_2 - c0 - 4*c2 - 16*c4 = 2*(c1 + 4*c3)
-  const BigInt c1_4c3 = (r_2 - c0 - (c2 * BigInt(4)) - (c4 * BigInt(16))) / BigInt(2);
-  const BigInt c3 = (c1_4c3 - sum_odd) / BigInt(3);
+  const BigInt c1_4c3 = (r_2 - c0 - c2 * 4 - c4 * 16) / 2;
+  const BigInt c3 = (c1_4c3 - sum_odd) / 3;
   const BigInt c1 = sum_odd - c3;
 
   // Combine: result = c0 + c1*B^k + c2*B^(2k) + c3*B^(3k) + c4*B^(4k)
