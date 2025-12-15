@@ -1,4 +1,4 @@
-﻿cmake_minimum_required(VERSION 3.20)
+cmake_minimum_required(VERSION 3.20)
 
 project(bigint-cpp
     VERSION 1.0.0
@@ -53,6 +53,7 @@ endif()
 # ============================================================================
 add_library(bigint STATIC
     src/BigInt.cpp
+    src/MontgomeryContext.cpp
 )
 add_library(bigint::bigint ALIAS bigint)
 
