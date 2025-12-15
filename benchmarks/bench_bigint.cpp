@@ -271,6 +271,36 @@ static void BM_BigInt_Multiplication_Huge(benchmark::State& state) {
 }
 BENCHMARK(BM_BigInt_Multiplication_Huge);
 
+// Generate ~2600 digit string (~8640 bits, ~270 words) to trigger Toom-Cook 3-way
+static std::string generateHugeString() {
+  std::string result;
+  for (int i = 0; i < 32; ++i) {
+    result += "12345678901234567890123456789012345678901234567890123456789012345678901234567890";
+  }
+  return result;
+}
+
+static std::string generateHugeStringB() {
+  std::string result;
+  for (int i = 0; i < 32; ++i) {
+    result += "98765432109876543210987654321098765432109876543210987654321098765432109876543210";
+  }
+  return result;
+}
+
+static void BM_BigInt_Multiplication_Toom3(benchmark::State& state) {
+  // Numbers > 8192 bits (256 words) trigger Toom-Cook 3-way multiplication
+  static const std::string HUGE_TOOM3_A = generateHugeString();
+  static const std::string HUGE_TOOM3_B = generateHugeStringB();
+  BigInt a(HUGE_TOOM3_A, 10);
+  BigInt b(HUGE_TOOM3_B, 10);
+  for (auto _ : state) {
+    BigInt result = a * b;
+    benchmark::DoNotOptimize(result);
+  }
+}
+BENCHMARK(BM_BigInt_Multiplication_Toom3);
+
 static void BM_BigInt_Division_Huge(benchmark::State& state) {
   BigInt a(HUGE_1024_B);
   BigInt b(HUGE_1024);

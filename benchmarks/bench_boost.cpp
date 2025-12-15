@@ -36,6 +36,26 @@ static const std::string NUM_LARGE_B =
     "987654321098765432109876543210987654321098765432109876543210"
     "987654321098765432109876543210987654321098765432109876543210";
 
+// ~8640 bits (270 words) - triggers Toom-Cook 3-way multiplication
+static std::string generateToom3String() {
+  std::string result;
+  for (int i = 0; i < 32; ++i) {
+    result += "12345678901234567890123456789012345678901234567890123456789012345678901234567890";
+  }
+  return result;
+}
+
+static std::string generateToom3StringB() {
+  std::string result;
+  for (int i = 0; i < 32; ++i) {
+    result += "98765432109876543210987654321098765432109876543210987654321098765432109876543210";
+  }
+  return result;
+}
+
+static const std::string NUM_TOOM3 = generateToom3String();
+static const std::string NUM_TOOM3_B = generateToom3StringB();
+
 // ============================================================================
 // Addition Comparison
 // ============================================================================
@@ -83,6 +103,26 @@ static void BM_Boost_Multiply(benchmark::State& state) {
   }
 }
 BENCHMARK(BM_Boost_Multiply);
+
+static void BM_BigInt_Multiply_Toom3(benchmark::State& state) {
+  BigInt a(NUM_TOOM3, 10);
+  BigInt b(NUM_TOOM3_B, 10);
+  for (auto _ : state) {
+    BigInt result = a * b;
+    benchmark::DoNotOptimize(result);
+  }
+}
+BENCHMARK(BM_BigInt_Multiply_Toom3);
+
+static void BM_Boost_Multiply_Toom3(benchmark::State& state) {
+  cpp_int a(NUM_TOOM3);
+  cpp_int b(NUM_TOOM3_B);
+  for (auto _ : state) {
+    cpp_int result = a * b;
+    benchmark::DoNotOptimize(result);
+  }
+}
+BENCHMARK(BM_Boost_Multiply_Toom3);
 
 // ============================================================================
 // Division Comparison

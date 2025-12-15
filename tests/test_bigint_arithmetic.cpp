@@ -322,6 +322,37 @@ TEST_F(BigIntArithmeticTest, HugeMultiplication) {
   EXPECT_EQ((result / a).toStdString(10), num100b);
 }
 
+TEST_F(BigIntArithmeticTest, Toom3Multiplication) {
+  // Test Toom-Cook 3-way multiplication with very large numbers (>256 words = >8192 bits)
+  // Generate ~2500 digit numbers (~8300 bits, ~260 words) to trigger Toom-3
+  // 1 decimal digit ≈ 3.32 bits, so need ~2500 digits for 8300 bits
+  std::string num2500a;
+  std::string num2500b;
+  for (int i = 0; i < 32; ++i) {
+    num2500a += "1234567890123456789012345678901234567890"
+                "1234567890123456789012345678901234567890";
+    num2500b += "9876543210987654321098765432109876543210"
+                "9876543210987654321098765432109876543210";
+  }
+
+  BigInt a(num2500a, 10);
+  BigInt b(num2500b, 10);
+
+  // Verify bit length is above Toom-3 threshold (256 words * 32 bits = 8192 bits)
+  EXPECT_GT(a.bitLength(), 8192);
+  EXPECT_GT(b.bitLength(), 8192);
+
+  BigInt result = a * b;
+
+  // Verify multiplication is correct by checking division reverses it
+  EXPECT_EQ((result / b).toStdString(10), num2500a);
+  EXPECT_EQ((result / a).toStdString(10), num2500b);
+
+  // Verify commutativity
+  BigInt result2 = b * a;
+  EXPECT_EQ(result, result2);
+}
+
 TEST_F(BigIntArithmeticTest, HugeDivision) {
   BigInt a(HUGE_B, 10);
   BigInt b(HUGE_A, 10);

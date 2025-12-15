@@ -67,6 +67,10 @@ constexpr uint8_t kDecimalCellSize = 9;
 /// Threshold for switching from schoolbook to Karatsuba multiplication
 constexpr size_t kKaratsubaThreshold = 32;
 
+/// Threshold for switching from Karatsuba to Toom-Cook 3-way multiplication
+/// Higher threshold due to interpolation overhead (division by 3, many additions)
+constexpr size_t kToom3Threshold = 256;
+
 /// Small primes for quick divisibility rejection in prime generation
 constexpr auto kSmallPrimes =
     std::to_array<uint32_t>({3,  5,  7,  11, 13, 17, 19, 23, 29, 31,  37,  41,  43,  47, 53,
@@ -1052,7 +1056,9 @@ BigInt BigInt::operator*(const BigInt& multiplier) const {
   BigInt product;
   const size_t max_size = std::max(digits_.size(), multiplier.digits_.size());
 
-  if (max_size >= kKaratsubaThreshold) {
+  if (max_size >= kToom3Threshold) {
+    product = multiplyToom3(multiplier);
+  } else if (max_size >= kKaratsubaThreshold) {
     product = multiplyKaratsuba(multiplier);
   } else {
     product = multiplySchoolbook(multiplier);
@@ -2457,6 +2463,107 @@ BigInt BigInt::multiplySchoolbook(const BigInt& other) const {
   }
 
   result.deleteZeroHighOrderDigit();
+  result.positive_ = true;
+  return result;
+}
+
+/// @brief Toom-Cook 3-way multiplication: O(n^1.465) complexity.
+/// @details Splits each operand into 3 parts of size k = ceil(n/3):
+///   p(x) = p0 + p1*x + p2*x^2  where x = B^k (B = 2^32)
+///   q(x) = q0 + q1*x + q2*x^2
+/// Evaluates at 5 points: 0, 1, -1, 2, ∞
+/// Performs 5 recursive multiplications, then interpolates.
+/// @note Intermediate values can be negative; signed arithmetic is used throughout.
+BigInt BigInt::multiplyToom3(const BigInt& other) const {
+  if (*this == 0 || other == 0) {
+    return BigInt();
+  }
+
+  const size_t m = digits_.size();
+  const size_t n = other.digits_.size();
+
+  // Fall back to Karatsuba for smaller operands
+  if (m < kToom3Threshold || n < kToom3Threshold) {
+    return multiplyKaratsuba(other);
+  }
+
+  // Split into 3 parts of size k
+  const size_t k = (std::max(m, n) + 2) / 3;
+
+  // Helper: extract slice [start, start+len) from digits as BigInt
+  auto sliceDigits = [](const std::vector<uint32_t>& digits, size_t start, size_t len) {
+    BigInt result;
+    if (start >= digits.size()) {
+      return result;  // Zero
+    }
+    const auto begin = digits.begin() + static_cast<ptrdiff_t>(start);
+    const auto end = begin + static_cast<ptrdiff_t>(std::min(len, digits.size() - start));
+    result.digits_.assign(begin, end);
+    result.deleteZeroHighOrderDigit();
+    result.positive_ = true;
+    return result;
+  };
+
+  // Split this = p0 + p1*B^k + p2*B^(2k)
+  const BigInt p0 = sliceDigits(digits_, 0, k);
+  const BigInt p1 = sliceDigits(digits_, k, k);
+  const BigInt p2 = sliceDigits(digits_, 2 * k, k);
+
+  // Split other = q0 + q1*B^k + q2*B^(2k)
+  const BigInt q0 = sliceDigits(other.digits_, 0, k);
+  const BigInt q1 = sliceDigits(other.digits_, k, k);
+  const BigInt q2 = sliceDigits(other.digits_, 2 * k, k);
+
+  // Helper: evaluate polynomial p0 + p1*x + p2*x^2 at point x
+  auto evaluateAt = [](const BigInt& c0, const BigInt& c1, const BigInt& c2, int x) {
+    switch (x) {
+      case 0:
+        return c0;
+      case 1:
+        return c0 + c1 + c2;
+      case -1:
+        return c0 - c1 + c2;  // Can be negative
+      case 2:
+        return c0 + (c1 << 1) + (c2 << 2);
+      default:
+        return c2;  // x = ∞ (leading coefficient)
+    }
+  };
+
+  // Evaluate p(x) and q(x) at 5 points and multiply
+  constexpr std::array kEvalPoints = {0, 1, -1, 2, 3};  // 3 represents ∞
+  std::array<BigInt, 5> r{};
+  for (size_t i = 0; i < kEvalPoints.size(); ++i) {
+    const int x = kEvalPoints[i];
+    r[i] = evaluateAt(p0, p1, p2, x) * evaluateAt(q0, q1, q2, x);
+  }
+
+  // Unpack evaluation results: r(0), r(1), r(-1), r(2), r(∞)
+  const auto& [r_0, r_1, r_m1, r_2, r_inf] = r;
+
+  // Interpolation to recover coefficients c0, c1, c2, c3, c4
+  // r(x) = c0 + c1*x + c2*x^2 + c3*x^3 + c4*x^4
+  const BigInt c0 = r_0;
+  const BigInt c4 = r_inf;
+
+  // r_1 + r_m1 = 2*(c0 + c2 + c4), r_1 - r_m1 = 2*(c1 + c3)
+  const BigInt sum_even = (r_1 + r_m1) / BigInt(2);  // c0 + c2 + c4
+  const BigInt sum_odd = (r_1 - r_m1) / BigInt(2);   // c1 + c3
+  const BigInt c2 = sum_even - c0 - c4;
+
+  // Use r_2 to separate c1 and c3:
+  // r_2 - c0 - 4*c2 - 16*c4 = 2*(c1 + 4*c3)
+  const BigInt c1_4c3 = (r_2 - c0 - (c2 * BigInt(4)) - (c4 * BigInt(16))) / BigInt(2);
+  const BigInt c3 = (c1_4c3 - sum_odd) / BigInt(3);
+  const BigInt c1 = sum_odd - c3;
+
+  // Combine: result = c0 + c1*B^k + c2*B^(2k) + c3*B^(3k) + c4*B^(4k)
+  const std::array coeffs = {c0, c1, c2, c3, c4};
+  BigInt result;
+  for (size_t i = 0; i < coeffs.size(); ++i) {
+    result = result + coeffs[i].shiftDigitsToHigh(i * k);
+  }
+
   result.positive_ = true;
   return result;
 }

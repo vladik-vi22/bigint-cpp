@@ -303,7 +303,14 @@ class BigInt {
   BigInt shiftDigitsToLow(size_t shift) const;
   BigInt toBigIntDec() const;
 
-  /// @brief Karatsuba multiplication helper for O(n^1.585) performance on large numbers.
+  /// @brief Toom-Cook 3-way multiplication for O(n^1.465) performance on large numbers.
+  /// @param other The multiplier.
+  /// @return Product of absolute values (sign handled by caller).
+  /// @details Splits operands into 3 parts, evaluates at 5 points (0, 1, -1, 2, ∞),
+  ///          performs 5 recursive multiplications, then interpolates the result.
+  [[nodiscard]] BigInt multiplyToom3(const BigInt& other) const;
+
+  /// @brief Karatsuba multiplication helper for O(n^1.585) performance on medium numbers.
   /// @param other The multiplier.
   /// @return Product of absolute values (sign handled by caller).
   [[nodiscard]] BigInt multiplyKaratsuba(const BigInt& other) const;

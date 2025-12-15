@@ -39,6 +39,26 @@ static const char* NUM_LARGE_B =
     "987654321098765432109876543210987654321098765432109876543210"
     "987654321098765432109876543210987654321098765432109876543210";
 
+// ~8640 bits (270 words) - triggers Toom-Cook 3-way multiplication
+static std::string generateToom3String() {
+  std::string result;
+  for (int i = 0; i < 32; ++i) {
+    result += "12345678901234567890123456789012345678901234567890123456789012345678901234567890";
+  }
+  return result;
+}
+
+static std::string generateToom3StringB() {
+  std::string result;
+  for (int i = 0; i < 32; ++i) {
+    result += "98765432109876543210987654321098765432109876543210987654321098765432109876543210";
+  }
+  return result;
+}
+
+static const std::string NUM_TOOM3 = generateToom3String();
+static const std::string NUM_TOOM3_B = generateToom3StringB();
+
 // ============================================================================
 // Addition Comparison
 // ============================================================================
@@ -96,6 +116,31 @@ static void BM_GMP_Multiply(benchmark::State& state) {
   mpz_clear(result);
 }
 BENCHMARK(BM_GMP_Multiply);
+
+static void BM_BigInt_Multiply_Toom3(benchmark::State& state) {
+  BigInt a(NUM_TOOM3, 10);
+  BigInt b(NUM_TOOM3_B, 10);
+  for (auto _ : state) {
+    BigInt result = a * b;
+    benchmark::DoNotOptimize(result);
+  }
+}
+BENCHMARK(BM_BigInt_Multiply_Toom3);
+
+static void BM_GMP_Multiply_Toom3(benchmark::State& state) {
+  mpz_t a, b, result;
+  mpz_init_set_str(a, NUM_TOOM3.c_str(), 10);
+  mpz_init_set_str(b, NUM_TOOM3_B.c_str(), 10);
+  mpz_init(result);
+  for (auto _ : state) {
+    mpz_mul(result, a, b);
+    benchmark::DoNotOptimize(result);
+  }
+  mpz_clear(a);
+  mpz_clear(b);
+  mpz_clear(result);
+}
+BENCHMARK(BM_GMP_Multiply_Toom3);
 
 // ============================================================================
 // Division Comparison
@@ -170,6 +215,46 @@ static void BM_GMP_PowMod(benchmark::State& state) {
   mpz_clear(result);
 }
 BENCHMARK(BM_GMP_PowMod);
+
+// ============================================================================
+// Modular Exponentiation - RSA Private Key Simulation (large exponent)
+// ============================================================================
+
+// Large odd modulus for Montgomery algorithm testing (~1024 bits)
+static const char* NUM_LARGE_ODD =
+    "1234567890123456789012345678901234567890123456789012345678901234567890"
+    "1234567890123456789012345678901234567890123456789012345678901234567890"
+    "1234567890123456789012345678901234567890123456789012345678901234567890"
+    "1234567890123456789012345678901234567890123456789012345678901234567890"
+    "12345678901234567890123456789012345678901234567891";
+
+static void BM_BigInt_PowMod_LargeExp(benchmark::State& state) {
+  BigInt base(NUM_SMALL);
+  BigInt exp(NUM_SMALL);  // Large exponent (~200 bits) - simulates private key
+  BigInt mod(NUM_LARGE_ODD);  // Large odd modulus - uses Montgomery CIOS
+  for (auto _ : state) {
+    BigInt result = powmod(base, exp, mod);
+    benchmark::DoNotOptimize(result);
+  }
+}
+BENCHMARK(BM_BigInt_PowMod_LargeExp);
+
+static void BM_GMP_PowMod_LargeExp(benchmark::State& state) {
+  mpz_t base, exp, mod, result;
+  mpz_init_set_str(base, NUM_SMALL, 10);
+  mpz_init_set_str(exp, NUM_SMALL, 10);  // Large exponent (~200 bits)
+  mpz_init_set_str(mod, NUM_LARGE_ODD, 10);
+  mpz_init(result);
+  for (auto _ : state) {
+    mpz_powm(result, base, exp, mod);
+    benchmark::DoNotOptimize(result);
+  }
+  mpz_clear(base);
+  mpz_clear(exp);
+  mpz_clear(mod);
+  mpz_clear(result);
+}
+BENCHMARK(BM_GMP_PowMod_LargeExp);
 
 // ============================================================================
 // GCD Comparison

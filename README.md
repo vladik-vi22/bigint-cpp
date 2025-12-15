@@ -96,19 +96,20 @@ ctest --test-dir build -C Release
 ### vs Boost.Multiprecision
 
 ```bash
-cmake -B build -DBIGINT_BUILD_COMPARISON_BENCHMARKS=ON
+cmake -B build -DBIGINT_BUILD_BOOST_BENCHMARKS=ON
 cmake --build build --config Release
-./build/benchmarks/bigint_comparison_benchmarks
+./build/benchmarks/bigint_boost_benchmarks
 ```
 
 | Operation | bigint-cpp | Boost | Ratio |
 |-----------|------------|-------|-------|
-| Add | 84 ns | 57 ns | ~1.5x slower |
-| Multiply | 115 ns | 107 ns | ~1.1x slower |
-| Divide | 542 ns | 1.1 μs | **~2x faster!** |
-| PowMod (e=65537) | 9.8 μs | 9.2 μs | ~1x (equal) |
-| PowMod (large exp) | 552 μs | 1.2 ms | **~2x faster!** |
-| GCD | 1.1 μs | 467 ns | ~2x slower |
+| Add | 76 ns | 57 ns | ~1.3x slower |
+| Multiply | 123 ns | 91 ns | ~1.4x slower |
+| Multiply (Toom-3, 8K+ bits) | 89 μs | 26 μs | ~3.4x slower |
+| Divide | 545 ns | 1.1 μs | **~2x faster!** |
+| PowMod (e=65537) | 9.7 μs | 8.8 μs | ~1.1x slower |
+| PowMod (large exp) | 558 μs | 1.2 ms | **~2x faster!** |
+| GCD | 1.0 μs | 481 ns | ~2x slower |
 
 ### vs GMP (the gold standard)
 
@@ -121,11 +122,13 @@ cmake --build build --config Release
 
 | Operation | bigint-cpp | GMP | Ratio |
 |-----------|------------|-----|-------|
-| Add | 76 ns | 10 ns | ~8x slower |
-| Multiply | 114 ns | 22 ns | ~5x slower |
-| Divide | 549 ns | 132 ns | ~4x slower |
-| PowMod (e=65537) | 9.6 μs | 429 ns | ~22x slower |
-| GCD | 1.1 μs | 157 ns | ~7x slower |
+| Add | 79 ns | 10 ns | ~8x slower |
+| Multiply | 119 ns | 16 ns | ~7x slower |
+| Multiply (Toom-3, 8K+ bits) | 90 μs | 5.4 μs | ~17x slower |
+| Divide | 545 ns | 130 ns | ~4x slower |
+| PowMod (e=65537) | 10 μs | 437 ns | ~23x slower |
+| PowMod (large exp) | 600 μs | 67 μs | ~9x slower |
+| GCD | 1.1 μs | 155 ns | ~7x slower |
 
 *Tested with ~200-600 bit numbers on MSVC 19.50, Release build.*
 
@@ -134,12 +137,12 @@ cmake --build build --config Release
 ## Internals
 
 - `std::vector<uint32_t>` storage, little-endian, base 2³²
-- Schoolbook O(n²) multiplication for small numbers, Karatsuba for large (threshold: 32 words)
+- Schoolbook O(n²) multiplication for small numbers, Karatsuba O(n^1.585) for medium, Toom-Cook 3-way O(n^1.465) for very large (>8192 bits)
 - **Knuth's Algorithm D** for division (TAOCP Vol 2, Section 4.3.1)
 - Euclidean GCD (leverages fast division)
 - PowMod: square-and-multiply with Montgomery CIOS + optimized squaring (large odd moduli) and Barrett reduction (even/medium moduli)
 - Miller-Rabin primality testing with deterministic witnesses for small numbers
-- 140 unit tests, Google Benchmark suite included
+- 141 unit tests, Google Benchmark suite included
 
 ## License
 

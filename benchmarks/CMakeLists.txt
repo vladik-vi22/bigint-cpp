@@ -28,11 +28,11 @@ target_link_libraries(bigint_benchmarks
 )
 
 # ============================================================================
-# Comparison Benchmark (vs Boost.Multiprecision - standalone mode)
+# Boost Comparison Benchmark (vs Boost.Multiprecision - standalone mode)
 # ============================================================================
-option(BIGINT_BUILD_COMPARISON_BENCHMARKS "Build comparison benchmarks vs Boost" OFF)
+option(BIGINT_BUILD_BOOST_BENCHMARKS "Build comparison benchmarks vs Boost.Multiprecision" OFF)
 
-if(BIGINT_BUILD_COMPARISON_BENCHMARKS)
+if(BIGINT_BUILD_BOOST_BENCHMARKS)
     # Fetch Boost.Multiprecision and its minimal dependencies for standalone mode
     FetchContent_Declare(
         boost_config
@@ -46,22 +46,22 @@ if(BIGINT_BUILD_COMPARISON_BENCHMARKS)
     )
     FetchContent_MakeAvailable(boost_config boost_multiprecision)
 
-    add_executable(bigint_comparison_benchmarks
-        bench_comparison.cpp
+    add_executable(bigint_boost_benchmarks
+        bench_boost.cpp
     )
 
-    target_compile_definitions(bigint_comparison_benchmarks
+    target_compile_definitions(bigint_boost_benchmarks
         PRIVATE
             BOOST_MP_STANDALONE
     )
 
-    target_include_directories(bigint_comparison_benchmarks
+    target_include_directories(bigint_boost_benchmarks
         PRIVATE
             ${boost_config_SOURCE_DIR}/include
             ${boost_multiprecision_SOURCE_DIR}/include
     )
 
-    target_link_libraries(bigint_comparison_benchmarks
+    target_link_libraries(bigint_boost_benchmarks
         PRIVATE
             bigint::bigint
             benchmark::benchmark
