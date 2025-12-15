@@ -280,9 +280,10 @@ class BigInt {
 
   /// @name Queries
   /// @{
-  [[nodiscard]] size_t bitLength() const noexcept;   ///< Number of bits (minimum 1 for zero)
-  [[nodiscard]] size_t byteLength() const noexcept;  ///< Number of bytes needed
+  [[nodiscard]] size_t bitLength() const noexcept;      ///< Number of bits (minimum 1 for zero)
+  [[nodiscard]] size_t byteLength() const noexcept;     ///< Number of bytes needed
   [[nodiscard]] bool testBit(size_t n) const noexcept;  ///< Test if bit at position n is set
+  [[nodiscard]] size_t trailingZeros() const noexcept;  ///< Count trailing zero bits (0 for zero)
   /// @}
 
  private:
