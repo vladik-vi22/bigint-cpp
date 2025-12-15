@@ -284,7 +284,7 @@ class BigInt {
   [[nodiscard]] size_t byteLength() const noexcept;     ///< Number of bytes needed
   [[nodiscard]] bool testBit(size_t n) const noexcept;  ///< Test if bit at position n is set
   [[nodiscard]] size_t trailingZeros() const noexcept;  ///< Count trailing zero bits (0 for zero)
-  /// @}
+                                                        /// @}
 
  private:
   bool positive_;                 ///< Sign flag (true = positive or zero)
@@ -296,7 +296,10 @@ class BigInt {
 
   BigInt operator*(uint32_t multiplier) const;
   BigInt& operator*=(uint32_t multiplier);
-  std::pair<BigInt, BigInt> DivMod(const BigInt& divisor) const;
+  std::pair<BigInt, BigInt> divmod(const BigInt& divisor) const;
+  std::pair<BigInt, BigInt> divmodSingleWord(uint32_t divisor, bool quotient_positive) const;
+  std::pair<BigInt, BigInt> divmodKnuth(const BigInt& divisor, size_t m, size_t n,
+                                        bool quotient_positive) const;
   friend BigInt BarrettReduction(const BigInt& dividend, const BigInt& divisor, const BigInt& mu);
   void alignTo(BigInt& other);
   void deleteZeroHighOrderDigit();

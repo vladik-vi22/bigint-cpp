@@ -14,8 +14,7 @@
 #include <ranges>
 #include <vector>
 
-namespace bigint {
-namespace internal {
+namespace bigint::internal {
 
 /// Number of bits per digit (32-bit words)
 constexpr size_t kBitsPerDigit = 32;
@@ -139,7 +138,6 @@ struct MontgomeryContext {
   mutable WordVec scratch_;      ///< Scratch buffer for CIOS algorithm
 };
 
-}  // namespace internal
-}  // namespace bigint
+}  // namespace bigint::internal
 
 #endif  // BIGINT_MONTGOMERY_CONTEXT_HPP

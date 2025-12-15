@@ -9,8 +9,7 @@
 
 #include <bigint/BigInt.hpp>
 
-namespace bigint {
-namespace internal {
+namespace bigint::internal {
 
 /**
  * @brief Barrett reduction context for fast modular reduction.
@@ -88,7 +87,6 @@ struct BarrettContext {
   BigInt mu_;    ///< Precomputed reciprocal: floor(2^(2k) / n)
 };
 
-}  // namespace internal
-}  // namespace bigint
+}  // namespace bigint::internal
 
 #endif  // BIGINT_BARRETT_CONTEXT_HPP

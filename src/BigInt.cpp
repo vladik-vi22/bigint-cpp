@@ -13,7 +13,8 @@
  * ## Algorithms
  * - **Multiplication**: Schoolbook for small numbers, Karatsuba for large (threshold: 32 words)
  * - **Division**: Knuth Algorithm D (multi-word long division with normalization)
- * - **Modular Exponentiation**: Montgomery CIOS for large odd moduli, standard square-and-multiply otherwise
+ * - **Modular Exponentiation**: Montgomery CIOS for large odd moduli, standard square-and-multiply
+ * otherwise
  * - **Primality**: Miller-Rabin with deterministic witnesses for small numbers
  * - **GCD**: Euclidean algorithm with fast division (Knuth Algorithm D)
  *
@@ -26,11 +27,9 @@
 
 #include <bigint/BigInt.hpp>
 
-#include "BarrettContext.hpp"
-#include "MontgomeryContext.hpp"
-
 #include <algorithm>
 #include <array>
+#include <bit>
 #include <bitset>
 #include <cmath>
 #include <compare>
@@ -40,6 +39,9 @@
 #include <ranges>
 #include <sstream>
 #include <stdexcept>
+
+#include "BarrettContext.hpp"
+#include "MontgomeryContext.hpp"
 
 namespace bigint {
 
@@ -122,6 +124,139 @@ std::string decimalToBinaryString(std::string decimal_str) {
 
   std::ranges::reverse(binary_str);
   return binary_str;
+}
+
+// ============================================================================
+// Division Algorithm Helpers (Knuth's Algorithm D)
+// ============================================================================
+
+/// Word and double-word types for division
+using Word = uint32_t;
+using DWord = uint64_t;
+using SignedDWord = int64_t;
+
+/// Mask for extracting lower 32 bits
+constexpr DWord kWordMask = 0xFFFFFFFF;
+
+/**
+ * @brief Counts leading zeros in a 32-bit word.
+ * @param word The word to analyze.
+ * @return Number of leading zero bits (0-32).
+ */
+[[nodiscard]] inline size_t countLeadingZeros(Word word) noexcept {
+  return static_cast<size_t>(std::countl_zero(word));
+}
+
+/**
+ * @brief Shifts a word vector left by a given number of bits.
+ * @param src Source vector.
+ * @param dst Destination vector (must be pre-sized).
+ * @param shift Number of bits to shift (0-31).
+ */
+inline void shiftWordsLeft(const std::vector<Word>& src, std::vector<Word>& dst, size_t shift) {
+  if (shift == 0) {
+    std::ranges::copy(src, dst.begin());
+    return;
+  }
+  Word carry = 0;
+  const size_t right_shift = kBitsPerDigit - shift;
+  for (size_t i = 0; i < src.size(); ++i) {
+    dst[i] = (src[i] << shift) | carry;
+    carry = src[i] >> right_shift;
+  }
+  if (dst.size() > src.size()) {
+    dst[src.size()] = carry;
+  }
+}
+
+/**
+ * @brief Shifts a word vector right by a given number of bits.
+ * @param src Source vector.
+ * @param dst Destination vector (must be pre-sized).
+ * @param n Number of words to process.
+ * @param shift Number of bits to shift (0-31).
+ */
+inline void shiftWordsRight(const std::vector<Word>& src, std::vector<Word>& dst, size_t n,
+                            size_t shift) {
+  if (shift == 0) {
+    std::ranges::copy_n(src.begin(), n, dst.begin());
+    return;
+  }
+  Word carry = 0;
+  const size_t left_shift = kBitsPerDigit - shift;
+  for (size_t i = n; i > 0; --i) {
+    dst[i - 1] = (src[i - 1] >> shift) | carry;
+    carry = src[i - 1] << left_shift;
+  }
+}
+
+/**
+ * @brief Computes trial quotient digit using Knuth's method.
+ * @param u_high High word of dividend segment.
+ * @param u_mid Middle word of dividend segment.
+ * @param u_low Low word of dividend segment.
+ * @param v_high High word of divisor.
+ * @param v_mid Second-highest word of divisor.
+ * @return Refined trial quotient (may still be 1 too large).
+ */
+[[nodiscard]] inline DWord computeTrialQuotient(Word u_high, Word u_mid, Word u_low, DWord v_high,
+                                                DWord v_mid) noexcept {
+  // Form two-word dividend
+  const DWord u_combined = (static_cast<DWord>(u_high) << kBitsPerDigit) | u_mid;
+  DWord q_hat = u_combined / v_high;
+  DWord r_hat = u_combined % v_high;
+
+  // Refine using second digit of divisor
+  while (q_hat >= kDigitBase || q_hat * v_mid > (r_hat << kBitsPerDigit) + u_low) {
+    --q_hat;
+    r_hat += v_high;
+    if (r_hat >= kDigitBase) {
+      break;
+    }
+  }
+  return q_hat;
+}
+
+/**
+ * @brief Multiplies divisor by q_hat and subtracts from dividend segment.
+ * @param u Dividend words (modified in place).
+ * @param v Divisor words.
+ * @param q_hat Trial quotient digit.
+ * @param idx Starting index in u.
+ * @param n Number of divisor words.
+ * @return Final borrow (negative if subtraction underflowed).
+ */
+inline SignedDWord multiplyAndSubtract(std::vector<Word>& u, const std::vector<Word>& v,
+                                       DWord q_hat, size_t idx, size_t n) {
+  SignedDWord borrow = 0;
+  for (size_t i = 0; i < n; ++i) {
+    const DWord product = q_hat * v[i];
+    const SignedDWord diff = static_cast<SignedDWord>(u[idx + i]) -
+                             static_cast<SignedDWord>(product & kWordMask) + borrow;
+    u[idx + i] = static_cast<Word>(diff & kWordMask);
+    borrow = (diff >> kBitsPerDigit) - static_cast<SignedDWord>(product >> kBitsPerDigit);
+  }
+  const SignedDWord final_diff = static_cast<SignedDWord>(u[idx + n]) + borrow;
+  u[idx + n] = static_cast<Word>(final_diff & kWordMask);
+  return final_diff;
+}
+
+/**
+ * @brief Adds divisor back to dividend segment (rare correction step).
+ * @param u Dividend words (modified in place).
+ * @param v Divisor words.
+ * @param idx Starting index in u.
+ * @param n Number of divisor words.
+ * @details Called when trial quotient was 1 too large (probability ~2/base).
+ */
+inline void addBack(std::vector<Word>& u, const std::vector<Word>& v, size_t idx, size_t n) {
+  DWord carry = 0;
+  for (size_t i = 0; i < n; ++i) {
+    const DWord sum = static_cast<DWord>(u[idx + i]) + v[i] + carry;
+    u[idx + i] = static_cast<Word>(sum & kWordMask);
+    carry = sum >> kBitsPerDigit;
+  }
+  u[idx + n] += static_cast<Word>(carry);
 }
 
 }  // anonymous namespace
@@ -637,155 +772,96 @@ BigInt& BigInt::operator*=(const BigInt& multiplier) {
   return *this;
 }
 
-std::pair<BigInt, BigInt> BigInt::DivMod(const BigInt& divisor) const {
+std::pair<BigInt, BigInt> BigInt::divmod(const BigInt& divisor) const {
   if (divisor == 0) {
     throw std::domain_error("Division by zero");
   }
 
-  // Handle signs at the end - work with absolute values
+  const bool quotient_positive = (positive_ == divisor.positive_);
+
+  // Compare magnitudes to handle trivial cases
   const int cmp = compareMagnitude(divisor);
   if (cmp < 0) {
-    // |dividend| < |divisor|, quotient = 0, remainder = dividend
-    BigInt quotient;
+    // |dividend| < |divisor| → quotient = 0, remainder = dividend
     BigInt remainder = *this;
-    remainder.positive_ = true;
-    if (!positive_ && remainder != 0) {
-      remainder.positive_ = false;
-    }
-    return std::make_pair(quotient, remainder);
+    remainder.positive_ = positive_ || (remainder == 0);
+    return {BigInt(), remainder};
   }
   if (cmp == 0) {
-    // |dividend| == |divisor|, quotient = ±1, remainder = 0
+    // |dividend| == |divisor| → quotient = ±1, remainder = 0
     BigInt quotient(1);
-    quotient.positive_ = (positive_ == divisor.positive_);
-    return std::make_pair(quotient, BigInt());
+    quotient.positive_ = quotient_positive;
+    return {quotient, BigInt()};
   }
 
   const size_t m = digits_.size();
   const size_t n = divisor.digits_.size();
 
-  // Special case: single-word divisor - use fast path
+  // Fast path: single-word divisor
   if (n == 1) {
-    const uint32_t d = divisor.digits_[0];
-    BigInt quotient;
-    quotient.digits_.resize(m);
-    uint64_t carry = 0;
-    for (size_t i = m; i > 0; --i) {
-      uint64_t cur = carry * kDigitBase + digits_[i - 1];
-      quotient.digits_[i - 1] = static_cast<uint32_t>(cur / d);
-      carry = cur % d;
-    }
-    quotient.deleteZeroHighOrderDigit();
-    quotient.positive_ = (positive_ == divisor.positive_);
-    if (quotient.digits_.empty()) {
-      quotient.digits_.emplace_back(0);
-      quotient.positive_ = true;
-    }
-
-    BigInt remainder(static_cast<uint32_t>(carry));
-    if (!positive_ && remainder != 0) {
-      remainder.positive_ = false;
-    }
-    return std::make_pair(quotient, remainder);
+    return divmodSingleWord(divisor.digits_[0], quotient_positive);
   }
 
   // Knuth's Algorithm D (TAOCP Vol 2, Section 4.3.1)
-  // Divides u[0..m-1] by v[0..n-1] where m >= n >= 2
+  return divmodKnuth(divisor, m, n, quotient_positive);
+}
 
+/**
+ * @brief Fast division by single-word divisor.
+ */
+std::pair<BigInt, BigInt> BigInt::divmodSingleWord(uint32_t d, bool quotient_positive) const {
+  const size_t m = digits_.size();
+  BigInt quotient;
+  quotient.digits_.resize(m);
+
+  uint64_t carry = 0;
+  for (size_t i = m; i-- > 0;) {
+    const uint64_t cur = carry * kDigitBase + digits_[i];
+    quotient.digits_[i] = static_cast<uint32_t>(cur / d);
+    carry = cur % d;
+  }
+
+  quotient.deleteZeroHighOrderDigit();
+  quotient.positive_ = quotient_positive || !quotient;
+
+  BigInt remainder(static_cast<uint32_t>(carry));
+  remainder.positive_ = positive_ || !remainder;
+  return {std::move(quotient), std::move(remainder)};
+}
+
+/**
+ * @brief Multi-word division using Knuth's Algorithm D.
+ */
+std::pair<BigInt, BigInt> BigInt::divmodKnuth(const BigInt& divisor, size_t m, size_t n,
+                                              bool quotient_positive) const {
   // D1: Normalize - shift so that v[n-1] >= base/2
-  const uint32_t v_high = divisor.digits_[n - 1];
-  size_t shift = 0;
-  if (v_high != 0) {
-    // Count leading zeros using bit manipulation
-    uint32_t temp = v_high;
-    while ((temp & 0x80000000) == 0) {
-      ++shift;
-      temp <<= 1;
-    }
-  }
+  const size_t shift = countLeadingZeros(divisor.digits_[n - 1]);
 
-  // Create normalized copies
-  std::vector<uint32_t> u(m + 1, 0);  // dividend with extra word
-  std::vector<uint32_t> v(n, 0);       // divisor
-
-  // Shift divisor left by 'shift' bits
-  if (shift == 0) {
-    for (size_t i = 0; i < n; ++i) {
-      v[i] = divisor.digits_[i];
-    }
-  } else {
-    uint32_t carry = 0;
-    for (size_t i = 0; i < n; ++i) {
-      uint32_t new_val = (divisor.digits_[i] << shift) | carry;
-      carry = divisor.digits_[i] >> (kBitsPerDigit - shift);
-      v[i] = new_val;
-    }
-  }
-
-  // Shift dividend left by 'shift' bits
-  if (shift == 0) {
-    for (size_t i = 0; i < m; ++i) {
-      u[i] = digits_[i];
-    }
-    u[m] = 0;
-  } else {
-    uint32_t carry = 0;
-    for (size_t i = 0; i < m; ++i) {
-      uint32_t new_val = (digits_[i] << shift) | carry;
-      carry = digits_[i] >> (kBitsPerDigit - shift);
-      u[i] = new_val;
-    }
-    u[m] = carry;
-  }
+  // Create normalized copies: u has m+1 words, v has n words
+  std::vector<Word> u(m + 1, 0);
+  std::vector<Word> v(n, 0);
+  shiftWordsLeft(divisor.digits_, v, shift);
+  shiftWordsLeft(digits_, u, shift);
 
   // D2-D7: Main loop - compute quotient digits from high to low
   const size_t q_size = m - n + 1;
-  std::vector<uint32_t> q(q_size, 0);
+  std::vector<Word> q(q_size, 0);
 
-  const uint64_t v_n1 = v[n - 1];  // Most significant word of divisor
-  const uint64_t v_n2 = (n >= 2) ? v[n - 2] : 0;
+  const DWord v_high = v[n - 1];
+  const DWord v_mid = (n >= 2) ? v[n - 2] : 0;
 
-  for (size_t j = q_size; j > 0; --j) {
-    const size_t idx = j - 1;  // Current quotient position
+  for (size_t j = q_size; j-- > 0;) {
+    // D3: Compute trial quotient
+    const DWord q_hat = computeTrialQuotient(u[j + n], u[j + n - 1], u[j + n - 2], v_high, v_mid);
 
-    // D3: Calculate trial quotient q_hat
-    const uint64_t u_high = (static_cast<uint64_t>(u[idx + n]) << kBitsPerDigit) + u[idx + n - 1];
-    uint64_t q_hat = u_high / v_n1;
-    uint64_t r_hat = u_high % v_n1;
+    // D4: Multiply and subtract
+    const SignedDWord borrow = multiplyAndSubtract(u, v, q_hat, j, n);
 
-    // Refine q_hat using second digit
-    while (q_hat >= kDigitBase ||
-           q_hat * v_n2 > (r_hat << kBitsPerDigit) + u[idx + n - 2]) {
-      --q_hat;
-      r_hat += v_n1;
-      if (r_hat >= kDigitBase) {
-        break;
-      }
-    }
-
-    // D4: Multiply and subtract: u[idx..idx+n] -= q_hat * v[0..n-1]
-    int64_t borrow = 0;
-    for (size_t i = 0; i < n; ++i) {
-      uint64_t product = q_hat * v[i];
-      int64_t diff = static_cast<int64_t>(u[idx + i]) - static_cast<int64_t>(product & 0xFFFFFFFF) + borrow;
-      u[idx + i] = static_cast<uint32_t>(diff & 0xFFFFFFFF);
-      borrow = (diff >> kBitsPerDigit) - static_cast<int64_t>(product >> kBitsPerDigit);
-    }
-    int64_t diff = static_cast<int64_t>(u[idx + n]) + borrow;
-    u[idx + n] = static_cast<uint32_t>(diff & 0xFFFFFFFF);
-
-    // D5: Test remainder - if negative, q_hat was too large
-    q[idx] = static_cast<uint32_t>(q_hat);
-    if (diff < 0) {
-      // D6: Add back - this happens rarely (probability ~2/base)
-      --q[idx];
-      uint64_t carry = 0;
-      for (size_t i = 0; i < n; ++i) {
-        uint64_t sum = static_cast<uint64_t>(u[idx + i]) + v[i] + carry;
-        u[idx + i] = static_cast<uint32_t>(sum & 0xFFFFFFFF);
-        carry = sum >> kBitsPerDigit;
-      }
-      u[idx + n] += static_cast<uint32_t>(carry);
+    // D5-D6: Store quotient digit, correct if needed
+    q[j] = static_cast<Word>(q_hat);
+    if (borrow < 0) {
+      --q[j];
+      addBack(u, v, j, n);
     }
   }
 
@@ -793,52 +869,29 @@ std::pair<BigInt, BigInt> BigInt::DivMod(const BigInt& divisor) const {
   BigInt quotient;
   quotient.digits_ = std::move(q);
   quotient.deleteZeroHighOrderDigit();
-  quotient.positive_ = (positive_ == divisor.positive_);
-  if (quotient.digits_.empty()) {
-    quotient.digits_.emplace_back(0);
-    quotient.positive_ = true;
-  }
+  quotient.positive_ = quotient_positive || !quotient;
 
-  // D8: Unnormalize remainder - shift right by 'shift' bits
+  // D8: Unnormalize remainder
   BigInt remainder;
   remainder.digits_.resize(n);
-  if (shift == 0) {
-    for (size_t i = 0; i < n; ++i) {
-      remainder.digits_[i] = u[i];
-    }
-  } else {
-    uint32_t carry = 0;
-    for (size_t i = n; i > 0; --i) {
-      uint32_t new_val = (u[i - 1] >> shift) | carry;
-      carry = u[i - 1] << (kBitsPerDigit - shift);
-      remainder.digits_[i - 1] = new_val;
-    }
-  }
+  shiftWordsRight(u, remainder.digits_, n, shift);
   remainder.deleteZeroHighOrderDigit();
-  remainder.positive_ = true;
-  if (remainder.digits_.empty()) {
-    remainder.digits_.emplace_back(0);
-  }
+  remainder.positive_ = positive_ || !remainder;
 
-  // Apply sign to remainder (C++ truncated division: remainder has same sign as dividend)
-  if (!positive_ && remainder != 0) {
-    remainder.positive_ = false;
-  }
-
-  return std::make_pair(quotient, remainder);
+  return {std::move(quotient), std::move(remainder)};
 }
 
 BigInt BigInt::operator/(const BigInt& divisor) const {
-  return DivMod(divisor).first;
+  return divmod(divisor).first;
 }
 
 BigInt& BigInt::operator/=(const BigInt& divisor) {
-  *this = DivMod(divisor).first;
+  *this = divmod(divisor).first;
   return *this;
 }
 
 BigInt BigInt::operator%(const BigInt& divisor) const {
-  return DivMod(divisor).second;
+  return divmod(divisor).second;
 }
 
 uint32_t BigInt::operator%(const uint32_t divisor) const {
@@ -865,7 +918,7 @@ uint32_t BigInt::operator%(const uint32_t divisor) const {
 }
 
 BigInt& BigInt::operator%=(const BigInt& divisor) {
-  *this = DivMod(divisor).second;
+  *this = divmod(divisor).second;
   return *this;
 }
 
@@ -968,8 +1021,9 @@ BigInt powmod(const BigInt& base, const BigInt& exponent, const BigInt& divisor)
     result.digits_ = std::move(result_vec);
     result.deleteZeroHighOrderDigit();
     return result;
+  }
 
-  } else if (use_barrett) {
+  if (use_barrett) {
     // Barrett reduction (for even moduli or medium-sized odd moduli)
     internal::BarrettContext barrett(divisor);
     BigInt result(1);
@@ -983,21 +1037,20 @@ BigInt powmod(const BigInt& base, const BigInt& exponent, const BigInt& divisor)
       }
     }
     return result;
-
-  } else {
-    // Standard square-and-multiply (for small numbers)
-    BigInt result(1);
-    BigInt b = base % divisor;
-
-    for (size_t i = 0; i < exp_bits; ++i) {
-      const size_t bit_idx = exp_bits - 1 - i;
-      result = (result * result) % divisor;
-      if (exponent.testBit(bit_idx)) {
-        result = (result * b) % divisor;
-      }
-    }
-    return result;
   }
+
+  // Standard square-and-multiply (for small numbers)
+  BigInt result(1);
+  BigInt b = base % divisor;
+
+  for (size_t i = 0; i < exp_bits; ++i) {
+    const size_t bit_idx = exp_bits - 1 - i;
+    result = (result * result) % divisor;
+    if (exponent.testBit(bit_idx)) {
+      result = (result * b) % divisor;
+    }
+  }
+  return result;
 }
 
 BigInt inversemod(BigInt value, const BigInt& modulus) {
@@ -2225,7 +2278,7 @@ BigInt BigInt::toBigIntDec() const {
   result.digits_.reserve(digits_.size() + 1);
 
   while (value) {
-    auto [quotient, remainder] = value.DivMod(decimal_divisor);
+    auto [quotient, remainder] = value.divmod(decimal_divisor);
     result.digits_.emplace_back(remainder.digits_.front());
     value = quotient;
   }
@@ -2234,5 +2287,3 @@ BigInt BigInt::toBigIntDec() const {
 }
 
 }  // namespace bigint
-
-

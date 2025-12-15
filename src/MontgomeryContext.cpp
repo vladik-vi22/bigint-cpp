@@ -5,8 +5,7 @@
 
 #include "MontgomeryContext.hpp"
 
-namespace bigint {
-namespace internal {
+namespace bigint::internal {
 
 void MontgomeryContext::multiply(const WordVec& a, const WordVec& b, WordVec& result) const {
   auto& t = scratch_;
@@ -213,5 +212,4 @@ void MontgomeryContext::extractResult(const WordVec& t, WordVec& result) const {
   conditionalSubtract(t_reduced, result);
 }
 
-}  // namespace internal
-}  // namespace bigint
+}  // namespace bigint::internal
