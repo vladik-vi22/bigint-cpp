@@ -952,7 +952,10 @@ BigInt pow(const BigInt& base, const BigInt& exponent) {
   return result;
 }
 
-size_t log2(const BigInt& value) noexcept {
+size_t log2(const BigInt& value) {
+  if (value <= 0) {
+    throw std::domain_error("log2 undefined for non-positive values");
+  }
   return value.bitLength() - 1;
 }
 

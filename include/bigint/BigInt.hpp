@@ -125,8 +125,9 @@ class BigInt {
   friend BigInt pow(const BigInt& base, const BigInt& exponent);
 
   /// @brief Compute floor of log base 2.
-  /// @return floor(log2(value)), or 0 if value <= 0.
-  friend size_t log2(const BigInt& value) noexcept;
+  /// @return floor(log2(value)).
+  /// @throws std::domain_error if value <= 0.
+  friend size_t log2(const BigInt& value);
 
   /// @brief Compute (base^exponent) mod modulus efficiently.
   /// @throws std::domain_error if modulus is zero.
