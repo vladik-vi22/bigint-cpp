@@ -1,4 +1,4 @@
-﻿# Clang-Format configuration for bigint-cpp
+# Clang-Format configuration for bigint-cpp
 # Based on Google C++ Style Guide with minor adjustments
 
 Language: Cpp

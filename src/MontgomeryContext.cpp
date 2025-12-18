@@ -1,4 +1,4 @@
-﻿/**
+/**
  * @file MontgomeryContext.cpp
  * @brief Implementation of Montgomery multiplication context.
  */

@@ -1,4 +1,4 @@
-﻿/**
+/**
  * @file bench_gmp.cpp
  * @brief Performance comparison: bigint-cpp vs GMP (GNU Multiple Precision)
  *

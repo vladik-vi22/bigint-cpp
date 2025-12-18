@@ -1,4 +1,4 @@
-﻿/**
+/**
  * @file BarrettContext.hpp
  * @brief Barrett reduction context for fast modular reduction.
  * @internal This is an internal implementation header, not part of the public API.

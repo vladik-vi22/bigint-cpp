@@ -1,4 +1,4 @@
-﻿# Clang-Tidy configuration for bigint-cpp
+# Clang-Tidy configuration for bigint-cpp
 # Comprehensive checks for modern C++20 code quality
 
 Checks: >

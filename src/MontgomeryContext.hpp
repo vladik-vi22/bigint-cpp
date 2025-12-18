@@ -1,4 +1,4 @@
-﻿/**
+/**
  * @file MontgomeryContext.hpp
  * @brief Montgomery multiplication context for modular exponentiation.
  * @internal This is an internal implementation header, not part of the public API.

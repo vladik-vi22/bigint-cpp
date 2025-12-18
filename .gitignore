@@ -1,8 +1,9 @@
-﻿# Build directories
+# Build directories
 build/
 
 # IDE
 .vs/
+.idea/
 *.user
 
 # CMake
