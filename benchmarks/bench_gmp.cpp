@@ -1,4 +1,4 @@
-/**
+﻿/**
  * @file bench_gmp.cpp
  * @brief Performance comparison: bigint-cpp vs GMP (GNU Multiple Precision)
  *
@@ -284,3 +284,134 @@ static void BM_GMP_GCD(benchmark::State& state) {
   mpz_clear(result);
 }
 BENCHMARK(BM_GMP_GCD);
+
+// ============================================================================
+// Divmod Comparison (quotient + remainder in one operation)
+// ============================================================================
+
+static void BM_BigInt_Divmod(benchmark::State& state) {
+  BigInt a(NUM_LARGE);
+  BigInt b(NUM_SMALL);
+  for (auto _ : state) {
+    auto [q, r] = divmod(a, b);
+    benchmark::DoNotOptimize(q);
+    benchmark::DoNotOptimize(r);
+  }
+}
+BENCHMARK(BM_BigInt_Divmod);
+
+static void BM_GMP_Divmod(benchmark::State& state) {
+  mpz_t a, b, q, r;
+  mpz_init_set_str(a, NUM_LARGE, 10);
+  mpz_init_set_str(b, NUM_SMALL, 10);
+  mpz_init(q);
+  mpz_init(r);
+  for (auto _ : state) {
+    mpz_tdiv_qr(q, r, a, b);
+    benchmark::DoNotOptimize(q);
+    benchmark::DoNotOptimize(r);
+  }
+  mpz_clear(a);
+  mpz_clear(b);
+  mpz_clear(q);
+  mpz_clear(r);
+}
+BENCHMARK(BM_GMP_Divmod);
+
+// ============================================================================
+// PopCount Comparison (count set bits)
+// ============================================================================
+
+static void BM_BigInt_PopCount(benchmark::State& state) {
+  BigInt a(NUM_LARGE);
+  for (auto _ : state) {
+    size_t result = a.popCount();
+    benchmark::DoNotOptimize(result);
+  }
+}
+BENCHMARK(BM_BigInt_PopCount);
+
+static void BM_GMP_PopCount(benchmark::State& state) {
+  mpz_t a;
+  mpz_init_set_str(a, NUM_LARGE, 10);
+  for (auto _ : state) {
+    mp_bitcnt_t result = mpz_popcount(a);
+    benchmark::DoNotOptimize(result);
+  }
+  mpz_clear(a);
+}
+BENCHMARK(BM_GMP_PopCount);
+
+// ============================================================================
+// TestBit Comparison
+// ============================================================================
+
+static void BM_BigInt_TestBit(benchmark::State& state) {
+  BigInt a(NUM_LARGE);
+  for (auto _ : state) {
+    bool result = a.testBit(100);
+    benchmark::DoNotOptimize(result);
+  }
+}
+BENCHMARK(BM_BigInt_TestBit);
+
+static void BM_GMP_TestBit(benchmark::State& state) {
+  mpz_t a;
+  mpz_init_set_str(a, NUM_LARGE, 10);
+  for (auto _ : state) {
+    int result = mpz_tstbit(a, 100);
+    benchmark::DoNotOptimize(result);
+  }
+  mpz_clear(a);
+}
+BENCHMARK(BM_GMP_TestBit);
+
+// ============================================================================
+// SetBit Comparison
+// ============================================================================
+
+static void BM_BigInt_SetBit(benchmark::State& state) {
+  BigInt a(NUM_SMALL);
+  for (auto _ : state) {
+    a.setBit(100);
+    a.clearBit(100);  // Reset for next iteration
+    benchmark::DoNotOptimize(a);
+  }
+}
+BENCHMARK(BM_BigInt_SetBit);
+
+static void BM_GMP_SetBit(benchmark::State& state) {
+  mpz_t a;
+  mpz_init_set_str(a, NUM_SMALL, 10);
+  for (auto _ : state) {
+    mpz_setbit(a, 100);
+    mpz_clrbit(a, 100);  // Reset for next iteration
+    benchmark::DoNotOptimize(a);
+  }
+  mpz_clear(a);
+}
+BENCHMARK(BM_GMP_SetBit);
+
+// ============================================================================
+// FlipBit Comparison
+// ============================================================================
+
+static void BM_BigInt_FlipBit(benchmark::State& state) {
+  BigInt a(NUM_SMALL);
+  for (auto _ : state) {
+    a.flipBit(50);
+    benchmark::DoNotOptimize(a);
+  }
+}
+BENCHMARK(BM_BigInt_FlipBit);
+
+static void BM_GMP_FlipBit(benchmark::State& state) {
+  mpz_t a;
+  mpz_init_set_str(a, NUM_SMALL, 10);
+  for (auto _ : state) {
+    mpz_combit(a, 50);
+    benchmark::DoNotOptimize(a);
+  }
+  mpz_clear(a);
+}
+BENCHMARK(BM_GMP_FlipBit);

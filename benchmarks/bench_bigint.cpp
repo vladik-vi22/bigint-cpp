@@ -593,4 +593,122 @@ static void BM_BigInt_RandomBits_256(benchmark::State& state) {
 }
 BENCHMARK(BM_BigInt_RandomBits_256);
 
+// ============================================================================
+// Divmod Benchmarks
+// ============================================================================
+
+static void BM_BigInt_Divmod_Small(benchmark::State& state) {
+  BigInt a("98765432109876543210");
+  BigInt b("12345678901234567890");
+  for (auto _ : state) {
+    auto result = divmod(a, b);
+    benchmark::DoNotOptimize(result);
+  }
+}
+BENCHMARK(BM_BigInt_Divmod_Small);
+
+static void BM_BigInt_Divmod_Large(benchmark::State& state) {
+  BigInt a("987654321098765432109876543210987654321098765432109876543210");
+  BigInt b("123456789012345678901234567890");
+  for (auto _ : state) {
+    auto result = divmod(a, b);
+    benchmark::DoNotOptimize(result);
+  }
+}
+BENCHMARK(BM_BigInt_Divmod_Large);
+
+static void BM_BigInt_Divmod_Huge(benchmark::State& state) {
+  BigInt a(HUGE_1024_B);
+  BigInt b(HUGE_1024);
+  for (auto _ : state) {
+    auto result = divmod(a, b);
+    benchmark::DoNotOptimize(result);
+  }
+}
+BENCHMARK(BM_BigInt_Divmod_Huge);
+
+static void BM_BigInt_Divmod_vs_Separate(benchmark::State& state) {
+  // Compare divmod vs separate / and % operations
+  BigInt a("987654321098765432109876543210987654321098765432109876543210");
+  BigInt b("123456789012345678901234567890");
+  for (auto _ : state) {
+    BigInt q = a / b;
+    BigInt r = a % b;
+    benchmark::DoNotOptimize(q);
+    benchmark::DoNotOptimize(r);
+  }
+}
+BENCHMARK(BM_BigInt_Divmod_vs_Separate);
+
+// ============================================================================
+// Bit Manipulation Benchmarks
+// ============================================================================
+
+static void BM_BigInt_PopCount_Small(benchmark::State& state) {
+  BigInt a("12345678901234567890");
+  for (auto _ : state) {
+    size_t result = a.popCount();
+    benchmark::DoNotOptimize(result);
+  }
+}
+BENCHMARK(BM_BigInt_PopCount_Small);
+
+static void BM_BigInt_PopCount_Large(benchmark::State& state) {
+  BigInt a(HUGE_1024);
+  for (auto _ : state) {
+    size_t result = a.popCount();
+    benchmark::DoNotOptimize(result);
+  }
+}
+BENCHMARK(BM_BigInt_PopCount_Large);
+
+static void BM_BigInt_SetBit(benchmark::State& state) {
+  for (auto _ : state) {
+    BigInt a(0);
+    for (size_t i = 0; i < 256; i += 8) {
+      a.setBit(i);
+    }
+    benchmark::DoNotOptimize(a);
+  }
+}
+BENCHMARK(BM_BigInt_SetBit);
+
+static void BM_BigInt_ClearBit(benchmark::State& state) {
+  // 2^256 - 1 (all bits set)
+  BigInt a(
+      "115792089237316195423570985008687907853269984665640564039457584007913129639935");
+  for (auto _ : state) {
+    BigInt copy = a;
+    for (size_t i = 0; i < 256; i += 8) {
+      copy.clearBit(i);
+    }
+    benchmark::DoNotOptimize(copy);
+  }
+}
+BENCHMARK(BM_BigInt_ClearBit);
+
+static void BM_BigInt_FlipBit(benchmark::State& state) {
+  BigInt a("12345678901234567890");
+  for (auto _ : state) {
+    BigInt copy = a;
+    for (size_t i = 0; i < 64; ++i) {
+      copy.flipBit(i);
+    }
+    benchmark::DoNotOptimize(copy);
+  }
+}
+BENCHMARK(BM_BigInt_FlipBit);
+
+static void BM_BigInt_TestBit(benchmark::State& state) {
+  BigInt a(HUGE_1024);
+  for (auto _ : state) {
+    bool result = false;
+    for (size_t i = 0; i < 1024; i += 32) {
+      result ^= a.testBit(i);
+    }
+    benchmark::DoNotOptimize(result);
+  }
+}
+BENCHMARK(BM_BigInt_TestBit);
+
 BENCHMARK_MAIN();

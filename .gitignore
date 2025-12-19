@@ -1,5 +1,7 @@
 # Build directories
 build/
+build_boost/
+build_gmp/
 
 # IDE
 .vs/
@@ -9,5 +11,6 @@ build/
 # CMake
 CMakeUserPresets.json
 
-# Local build script
+# Local build scripts
 build.bat
+build_and_test.bat

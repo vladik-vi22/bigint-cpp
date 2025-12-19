@@ -153,6 +153,13 @@ class BigInt {
   /// @throws std::domain_error if value <= 0.
   friend size_t log2(const BigInt& value);
 
+  /// @brief Compute quotient and remainder in one operation.
+  /// @param dividend The dividend.
+  /// @param divisor The divisor.
+  /// @return Pair of (quotient, remainder).
+  /// @throws std::domain_error if divisor is zero.
+  friend std::pair<BigInt, BigInt> divmod(const BigInt& dividend, const BigInt& divisor);
+
   /// @brief Compute (base^exponent) mod modulus efficiently.
   /// @throws std::domain_error if modulus is zero.
   friend BigInt powmod(const BigInt& base, const BigInt& exponent, const BigInt& modulus);
@@ -309,6 +316,14 @@ class BigInt {
   [[nodiscard]] size_t byteLength() const noexcept;     ///< Number of bytes needed
   [[nodiscard]] bool testBit(size_t n) const noexcept;  ///< Test if bit at position n is set
   [[nodiscard]] size_t trailingZeros() const noexcept;  ///< Count trailing zero bits (0 for zero)
+  [[nodiscard]] size_t popCount() const noexcept;       ///< Count number of set bits (1s)
+  /// @}
+
+  /// @name Bit Manipulation
+  /// @{
+  BigInt& setBit(size_t n);    ///< Set bit at position n to 1
+  BigInt& clearBit(size_t n);  ///< Clear bit at position n to 0
+  BigInt& flipBit(size_t n);   ///< Toggle bit at position n
   /// @}
 
  private:
@@ -319,7 +334,6 @@ class BigInt {
   /// @return -1 if |*this| < |other|, 0 if equal, 1 if |*this| > |other|
   [[nodiscard]] int compareMagnitude(const BigInt& other) const noexcept;
 
-  [[nodiscard]] std::pair<BigInt, BigInt> divmod(const BigInt& divisor) const;
   [[nodiscard]] std::pair<BigInt, BigInt> divmodSingleWord(uint32_t divisor,
                                                            bool quotient_positive) const;
   [[nodiscard]] std::pair<BigInt, BigInt> divmodKnuth(const BigInt& divisor, size_t m, size_t n,

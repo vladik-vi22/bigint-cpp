@@ -107,9 +107,14 @@ cmake --build build --config Release
 | Multiply | 123 ns | 91 ns | ~1.4x slower |
 | Multiply (Toom-3, 8K+ bits) | 89 μs | 26 μs | ~3.4x slower |
 | Divide | 545 ns | 1.1 μs | **~2x faster!** |
+| Divmod | 444 ns | 1.1 μs | **~2.5x faster!** |
 | PowMod (e=65537) | 9.7 μs | 8.8 μs | ~1.1x slower |
 | PowMod (large exp) | 558 μs | 1.2 ms | **~2x faster!** |
 | GCD | 1.0 μs | 481 ns | ~2x slower |
+| PopCount | 12 ns | 673 ns | **~54x faster!** |
+| TestBit | 3.0 ns | 1.8 ns | ~1.7x slower |
+| SetBit | 5.3 ns | 3.5 ns | ~1.5x slower |
+| FlipBit | 4.8 ns | 2.0 ns | ~2.4x slower |
 
 ### vs GMP (the gold standard)
 
@@ -126,13 +131,18 @@ cmake --build build --config Release
 | Multiply | 119 ns | 16 ns | ~7x slower |
 | Multiply (Toom-3, 8K+ bits) | 90 μs | 5.4 μs | ~17x slower |
 | Divide | 545 ns | 130 ns | ~4x slower |
+| Divmod | 442 ns | 123 ns | ~3.6x slower |
 | PowMod (e=65537) | 10 μs | 437 ns | ~23x slower |
 | PowMod (large exp) | 600 μs | 67 μs | ~9x slower |
 | GCD | 1.1 μs | 155 ns | ~7x slower |
+| PopCount | 12 ns | 12 ns | **~same!** |
+| TestBit | 2.8 ns | 2.8 ns | **~same!** |
+| SetBit | 5.6 ns | 6.3 ns | **~1.1x faster!** |
+| FlipBit | 4.8 ns | 3.1 ns | ~1.6x slower |
 
 *Tested with ~200-600 bit numbers on MSVC 19.50, Release build.*
 
-**Takeaway:** Division uses Knuth's Algorithm D - faster than Boost! For small exponents (RSA public key e=65537), we match Boost. For large exponents (RSA private key), our optimized Montgomery squaring beats Boost by 2x! GMP uses hand-tuned assembly - we're pure C++.
+**Takeaway:** Division uses Knuth's Algorithm D - faster than Boost! For small exponents (RSA public key e=65537), we match Boost. For large exponents (RSA private key), our optimized Montgomery squaring beats Boost by 2x! PopCount uses C++20 `std::popcount` - 54x faster than Boost's bit-by-bit iteration, matching GMP's native implementation. GMP uses hand-tuned assembly - we're pure C++.
 
 ## Internals
 

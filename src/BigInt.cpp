@@ -740,40 +740,6 @@ BigInt& BigInt::operator*=(const BigInt& multiplier) {
   return *this;
 }
 
-std::pair<BigInt, BigInt> BigInt::divmod(const BigInt& divisor) const {
-  if (divisor == 0) {
-    throw std::domain_error("Division by zero");
-  }
-
-  const bool quotient_positive = (positive_ == divisor.positive_);
-
-  // Compare magnitudes to handle trivial cases
-  const int cmp = compareMagnitude(divisor);
-  if (cmp < 0) {
-    // |dividend| < |divisor| → quotient = 0, remainder = dividend
-    BigInt remainder = *this;
-    remainder.positive_ = positive_ || (remainder == 0);
-    return {BigInt(), remainder};
-  }
-  if (cmp == 0) {
-    // |dividend| == |divisor| → quotient = ±1, remainder = 0
-    BigInt quotient(1);
-    quotient.positive_ = quotient_positive;
-    return {quotient, BigInt()};
-  }
-
-  const size_t m = digits_.size();
-  const size_t n = divisor.digits_.size();
-
-  // Fast path: single-word divisor
-  if (n == 1) {
-    return divmodSingleWord(divisor.digits_[0], quotient_positive);
-  }
-
-  // Knuth's Algorithm D (TAOCP Vol 2, Section 4.3.1)
-  return divmodKnuth(divisor, m, n, quotient_positive);
-}
-
 /**
  * @brief Fast division by single-word divisor.
  */
@@ -850,20 +816,20 @@ std::pair<BigInt, BigInt> BigInt::divmodKnuth(const BigInt& divisor, size_t m, s
 }
 
 BigInt BigInt::operator/(const BigInt& divisor) const {
-  return divmod(divisor).first;
+  return divmod(*this, divisor).first;
 }
 
 BigInt& BigInt::operator/=(const BigInt& divisor) {
-  *this = divmod(divisor).first;
+  *this = divmod(*this, divisor).first;
   return *this;
 }
 
 BigInt BigInt::operator%(const BigInt& divisor) const {
-  return divmod(divisor).second;
+  return divmod(*this, divisor).second;
 }
 
 BigInt& BigInt::operator%=(const BigInt& divisor) {
-  *this = divmod(divisor).second;
+  *this = divmod(*this, divisor).second;
   return *this;
 }
 
@@ -902,6 +868,40 @@ size_t log2(const BigInt& value) {
     throw std::domain_error("log2 undefined for non-positive values");
   }
   return value.bitLength() - 1;
+}
+
+std::pair<BigInt, BigInt> divmod(const BigInt& dividend, const BigInt& divisor) {
+  if (divisor == 0) {
+    throw std::domain_error("Division by zero");
+  }
+
+  const bool quotient_positive = (dividend.positive_ == divisor.positive_);
+
+  // Compare magnitudes to handle trivial cases
+  const int cmp = dividend.compareMagnitude(divisor);
+  if (cmp < 0) {
+    // |dividend| < |divisor| → quotient = 0, remainder = dividend
+    BigInt remainder = dividend;
+    remainder.positive_ = dividend.positive_ || (remainder == 0);
+    return {BigInt(), remainder};
+  }
+  if (cmp == 0) {
+    // |dividend| == |divisor| → quotient = ±1, remainder = 0
+    BigInt quotient(1);
+    quotient.positive_ = quotient_positive;
+    return {quotient, BigInt()};
+  }
+
+  const size_t m = dividend.digits_.size();
+  const size_t n = divisor.digits_.size();
+
+  // Fast path: single-word divisor
+  if (n == 1) {
+    return dividend.divmodSingleWord(divisor.digits_[0], quotient_positive);
+  }
+
+  // Knuth's Algorithm D (TAOCP Vol 2, Section 4.3.1)
+  return dividend.divmodKnuth(divisor, m, n, quotient_positive);
 }
 
 BigInt powmod(const BigInt& base, const BigInt& exponent, const BigInt& divisor) {
@@ -1986,6 +1986,57 @@ size_t BigInt::trailingZeros() const noexcept {
   return count;
 }
 
+size_t BigInt::popCount() const noexcept {
+  size_t count = 0;
+  for (const auto& digit : digits_) {
+    count += static_cast<size_t>(std::popcount(digit));
+  }
+  return count;
+}
+
+// ============================================================================
+// Bit Manipulation
+// ============================================================================
+
+BigInt& BigInt::setBit(size_t n) {
+  const size_t word_idx = n >> kDigitShift;
+  const size_t bit_idx = n & kBitIndexMask;
+
+  // Extend digits if necessary
+  if (word_idx >= digits_.size()) {
+    digits_.resize(word_idx + 1, 0);
+  }
+
+  digits_[word_idx] |= (1U << bit_idx);
+  return *this;
+}
+
+BigInt& BigInt::clearBit(size_t n) {
+  const size_t word_idx = n >> kDigitShift;
+  if (word_idx >= digits_.size()) {
+    return *this;  // Bit is already 0 (beyond current size)
+  }
+
+  const size_t bit_idx = n & kBitIndexMask;
+  digits_[word_idx] &= ~(1U << bit_idx);
+  deleteZeroHighOrderDigit();
+  return *this;
+}
+
+BigInt& BigInt::flipBit(size_t n) {
+  const size_t word_idx = n >> kDigitShift;
+  const size_t bit_idx = n & kBitIndexMask;
+
+  // Extend digits if necessary
+  if (word_idx >= digits_.size()) {
+    digits_.resize(word_idx + 1, 0);
+  }
+
+  digits_[word_idx] ^= (1U << bit_idx);
+  deleteZeroHighOrderDigit();
+  return *this;
+}
+
 // ============================================================================
 // Private Helper Methods
 // ============================================================================
@@ -2346,7 +2397,7 @@ BigInt BigInt::toBigIntDec() const {
   result.digits_.reserve(digits_.size() + 1);
 
   while (value) {
-    auto [quotient, remainder] = value.divmod(decimal_divisor);
+    auto [quotient, remainder] = divmod(value, decimal_divisor);
     result.digits_.emplace_back(remainder.digits_.front());
     value = quotient;
   }

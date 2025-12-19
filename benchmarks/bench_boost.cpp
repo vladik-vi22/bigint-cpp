@@ -232,5 +232,127 @@ static void BM_Boost_GCD(benchmark::State& state) {
 }
 BENCHMARK(BM_Boost_GCD);
 
+// ============================================================================
+// Divmod Comparison (quotient + remainder in one operation)
+// ============================================================================
+
+static void BM_BigInt_Divmod(benchmark::State& state) {
+  BigInt a(NUM_LARGE);
+  BigInt b(NUM_SMALL);
+  for (auto _ : state) {
+    auto [q, r] = divmod(a, b);
+    benchmark::DoNotOptimize(q);
+    benchmark::DoNotOptimize(r);
+  }
+}
+BENCHMARK(BM_BigInt_Divmod);
+
+static void BM_Boost_Divmod(benchmark::State& state) {
+  cpp_int a(NUM_LARGE);
+  cpp_int b(NUM_SMALL);
+  for (auto _ : state) {
+    cpp_int q, r;
+    boost::multiprecision::divide_qr(a, b, q, r);
+    benchmark::DoNotOptimize(q);
+    benchmark::DoNotOptimize(r);
+  }
+}
+BENCHMARK(BM_Boost_Divmod);
+
+// ============================================================================
+// PopCount Comparison (count set bits)
+// ============================================================================
+
+static void BM_BigInt_PopCount(benchmark::State& state) {
+  BigInt a(NUM_LARGE);
+  for (auto _ : state) {
+    size_t result = a.popCount();
+    benchmark::DoNotOptimize(result);
+  }
+}
+BENCHMARK(BM_BigInt_PopCount);
+
+static void BM_Boost_PopCount(benchmark::State& state) {
+  cpp_int a(NUM_LARGE);
+  for (auto _ : state) {
+    // Boost doesn't have popcount - count bits manually via bit_test
+    unsigned count = 0;
+    unsigned bits = msb(a) + 1;
+    for (unsigned i = 0; i < bits; ++i) {
+      if (bit_test(a, i)) ++count;
+    }
+    benchmark::DoNotOptimize(count);
+  }
+}
+BENCHMARK(BM_Boost_PopCount);
+
+// ============================================================================
+// TestBit Comparison
+// ============================================================================
+
+static void BM_BigInt_TestBit(benchmark::State& state) {
+  BigInt a(NUM_LARGE);
+  for (auto _ : state) {
+    bool result = a.testBit(100);
+    benchmark::DoNotOptimize(result);
+  }
+}
+BENCHMARK(BM_BigInt_TestBit);
+
+static void BM_Boost_TestBit(benchmark::State& state) {
+  cpp_int a(NUM_LARGE);
+  for (auto _ : state) {
+    bool result = bit_test(a, 100);
+    benchmark::DoNotOptimize(result);
+  }
+}
+BENCHMARK(BM_Boost_TestBit);
+
+// ============================================================================
+// SetBit Comparison
+// ============================================================================
+
+static void BM_BigInt_SetBit(benchmark::State& state) {
+  BigInt a(NUM_SMALL);
+  for (auto _ : state) {
+    a.setBit(100);
+    a.clearBit(100);  // Reset for next iteration
+    benchmark::DoNotOptimize(a);
+  }
+}
+BENCHMARK(BM_BigInt_SetBit);
+
+static void BM_Boost_SetBit(benchmark::State& state) {
+  cpp_int a(NUM_SMALL);
+  for (auto _ : state) {
+    bit_set(a, 100);
+    bit_unset(a, 100);  // Reset for next iteration
+    benchmark::DoNotOptimize(a);
+  }
+}
+BENCHMARK(BM_Boost_SetBit);
+
+// ============================================================================
+// FlipBit Comparison
+// ============================================================================
+
+static void BM_BigInt_FlipBit(benchmark::State& state) {
+  BigInt a(NUM_SMALL);
+  for (auto _ : state) {
+    a.flipBit(50);
+    benchmark::DoNotOptimize(a);
+  }
+}
+BENCHMARK(BM_BigInt_FlipBit);
+
+static void BM_Boost_FlipBit(benchmark::State& state) {
+  cpp_int a(NUM_SMALL);
+  for (auto _ : state) {
+    bit_flip(a, 50);
+    benchmark::DoNotOptimize(a);
+  }
+}
+BENCHMARK(BM_Boost_FlipBit);
+
 BENCHMARK_MAIN();
 
