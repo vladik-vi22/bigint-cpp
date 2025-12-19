@@ -31,10 +31,13 @@
 #include <array>
 #include <bit>
 #include <bitset>
-#include <cmath>
-#include <compare>
+#include <cstddef>
 #include <iomanip>
+#include <ios>
+#include <istream>
 #include <iterator>
+#include <limits>
+#include <ostream>
 #include <random>
 #include <ranges>
 #include <sstream>
@@ -333,7 +336,7 @@ BigInt::BigInt(std::string str, const uint8_t base) {
   }
 }
 
-BigInt::BigInt(const std::vector<bool>& vec, const bool is_positive_) {
+BigInt::BigInt(const std::vector<bool>& vec, const bool is_positive) {
   const size_t remainder_bits = vec.size() & kBitIndexMask;
   const size_t full_digits = vec.size() >> kDigitShift;
   digits_.reserve(remainder_bits ? full_digits + 1 : full_digits);
@@ -362,17 +365,17 @@ BigInt::BigInt(const std::vector<bool>& vec, const bool is_positive_) {
   }
 
   deleteZeroHighOrderDigit();
-  positive_ = is_positive_;
+  positive_ = is_positive;
 }
 
-BigInt::BigInt(std::span<const uint32_t> data, const bool is_positive_) : positive_(is_positive_) {
+BigInt::BigInt(std::span<const uint32_t> data, const bool is_positive) : positive_(is_positive) {
   digits_.reserve(data.size());
   // Input is big-endian, internal storage is little-endian
   std::ranges::copy(std::views::reverse(data), std::back_inserter(digits_));
   deleteZeroHighOrderDigit();
 }
 
-BigInt::BigInt(std::span<const uint16_t> data, const bool is_positive_) {
+BigInt::BigInt(std::span<const uint16_t> data, const bool is_positive) {
   digits_.reserve((data.size() + 1) / 2);
   // Process from end (big-endian input) in pairs
   size_t i = data.size();
@@ -385,10 +388,10 @@ BigInt::BigInt(std::span<const uint16_t> data, const bool is_positive_) {
     digits_.emplace_back(static_cast<uint32_t>(data[0]));
   }
   deleteZeroHighOrderDigit();
-  positive_ = is_positive_;
+  positive_ = is_positive;
 }
 
-BigInt::BigInt(std::span<const uint8_t> data, const bool is_positive_) {
+BigInt::BigInt(std::span<const uint8_t> data, const bool is_positive) {
   digits_.reserve((data.size() + 3) / 4);
   // Process from end (big-endian input) in groups of 4
   size_t i = data.size();
@@ -408,7 +411,7 @@ BigInt::BigInt(std::span<const uint8_t> data, const bool is_positive_) {
     digits_.emplace_back(static_cast<uint32_t>(data[0]));
   }
   deleteZeroHighOrderDigit();
-  positive_ = is_positive_;
+  positive_ = is_positive;
 }
 
 void BigInt::initFromUnsigned(const uint64_t value, const bool is_positive) {
@@ -457,19 +460,19 @@ BigInt BigInt::operator+() const {
   return *this;
 }
 
-BigInt BigInt::operator+(const BigInt& addend) const {
-  if (positive_ && addend.positive_) {
+BigInt operator+(const BigInt& lhs, const BigInt& rhs) {
+  if (lhs.positive_ && rhs.positive_) {
     BigInt sum;
     uint32_t carry = 0;
     uint64_t temp_sum;
-    const bool this_larger = (digits_.size() >= addend.digits_.size());
+    const bool lhs_larger = (lhs.digits_.size() >= rhs.digits_.size());
 
-    sum.digits_.reserve(this_larger ? digits_.size() + 1 : addend.digits_.size() + 1);
+    sum.digits_.reserve(lhs_larger ? lhs.digits_.size() + 1 : rhs.digits_.size() + 1);
 
-    auto larger_it = this_larger ? digits_.cbegin() : addend.digits_.cbegin();
-    auto smaller_it = this_larger ? addend.digits_.cbegin() : digits_.cbegin();
-    auto larger_end = this_larger ? digits_.cend() : addend.digits_.cend();
-    auto smaller_end = this_larger ? addend.digits_.cend() : digits_.cend();
+    auto larger_it = lhs_larger ? lhs.digits_.cbegin() : rhs.digits_.cbegin();
+    auto smaller_it = lhs_larger ? rhs.digits_.cbegin() : lhs.digits_.cbegin();
+    auto larger_end = lhs_larger ? lhs.digits_.cend() : rhs.digits_.cend();
+    auto smaller_end = lhs_larger ? rhs.digits_.cend() : lhs.digits_.cend();
 
     while (smaller_it != smaller_end) {
       temp_sum = static_cast<uint64_t>(*larger_it) + static_cast<uint64_t>(*smaller_it) +
@@ -492,35 +495,35 @@ BigInt BigInt::operator+(const BigInt& addend) const {
     }
     sum.positive_ = true;
     return sum;
-  } else if (positive_ && !addend.positive_) {
-    return *this - abs(addend);
-  } else if (!positive_ && addend.positive_) {
-    return addend - abs(*this);
-  } else {  // !positive_ && !addend.positive_
-    return -(abs(*this) + abs(addend));
+  } else if (lhs.positive_ && !rhs.positive_) {
+    return lhs - abs(rhs);
+  } else if (!lhs.positive_ && rhs.positive_) {
+    return rhs - abs(lhs);
+  } else {  // !lhs.positive_ && !rhs.positive_
+    return -(abs(lhs) + abs(rhs));
   }
 }
 
-BigInt& BigInt::operator+=(const BigInt& addend) {
+BigInt& BigInt::operator+=(const BigInt& rhs) {
   // Handle zero cases
-  if (addend == 0) {
+  if (rhs == 0) {
     return *this;
   }
   if (*this == 0) {
-    *this = addend;
+    *this = rhs;
     return *this;
   }
 
   // Same sign: add magnitudes
-  if (positive_ == addend.positive_) {
-    if (digits_.size() < addend.digits_.size()) {
-      digits_.resize(addend.digits_.size(), 0);
+  if (positive_ == rhs.positive_) {
+    if (digits_.size() < rhs.digits_.size()) {
+      digits_.resize(rhs.digits_.size(), 0);
     }
 
     uint32_t carry = 0;
     size_t i = 0;
-    for (; i < addend.digits_.size(); ++i) {
-      uint64_t sum = static_cast<uint64_t>(digits_[i]) + static_cast<uint64_t>(addend.digits_[i]) +
+    for (; i < rhs.digits_.size(); ++i) {
+      uint64_t sum = static_cast<uint64_t>(digits_[i]) + static_cast<uint64_t>(rhs.digits_[i]) +
                      static_cast<uint64_t>(carry);
       digits_[i] = static_cast<uint32_t>(sum);
       carry = static_cast<uint32_t>(sum >> kBitsPerDigit);
@@ -536,7 +539,7 @@ BigInt& BigInt::operator+=(const BigInt& addend) {
     }
   } else {
     // Different signs: subtract smaller magnitude from larger
-    int mag_cmp = compareMagnitude(addend);
+    int mag_cmp = compareMagnitude(rhs);
     if (mag_cmp == 0) {
       digits_.clear();
       digits_.push_back(0);
@@ -544,9 +547,9 @@ BigInt& BigInt::operator+=(const BigInt& addend) {
       return *this;
     }
 
-    const BigInt* larger = (mag_cmp > 0) ? this : &addend;
-    const BigInt* smaller = (mag_cmp > 0) ? &addend : this;
-    bool result_positive = (mag_cmp > 0) ? positive_ : addend.positive_;
+    const BigInt* larger = (mag_cmp > 0) ? this : &rhs;
+    const BigInt* smaller = (mag_cmp > 0) ? &rhs : this;
+    bool result_positive = (mag_cmp > 0) ? positive_ : rhs.positive_;
 
     std::vector<uint32_t> result(larger->digits_.size(), 0);
     uint8_t borrow = 0;
@@ -614,17 +617,17 @@ BigInt BigInt::operator-() const {
   return negated;
 }
 
-BigInt BigInt::operator-(const BigInt& subtrahend) const {
-  if (positive_ && subtrahend.positive_) {
-    if (*this >= subtrahend) {
+BigInt operator-(const BigInt& lhs, const BigInt& rhs) {
+  if (lhs.positive_ && rhs.positive_) {
+    if (lhs >= rhs) {
       BigInt diff;
       uint8_t borrow = 0;
-      diff.digits_.reserve(digits_.size());
+      diff.digits_.reserve(lhs.digits_.size());
 
-      auto minuend_it = digits_.cbegin();
-      auto subtrahend_it = subtrahend.digits_.cbegin();
+      auto minuend_it = lhs.digits_.cbegin();
+      auto subtrahend_it = rhs.digits_.cbegin();
 
-      while (subtrahend_it != subtrahend.digits_.cend()) {
+      while (subtrahend_it != rhs.digits_.cend()) {
         int64_t temp_diff = static_cast<int64_t>(*minuend_it) -
                             static_cast<int64_t>(*subtrahend_it) - static_cast<int64_t>(borrow);
         if (temp_diff >= 0) {
@@ -639,7 +642,7 @@ BigInt BigInt::operator-(const BigInt& subtrahend) const {
         ++subtrahend_it;
       }
 
-      while (minuend_it != digits_.cend()) {
+      while (minuend_it != lhs.digits_.cend()) {
         int64_t temp_diff = static_cast<int64_t>(*minuend_it) - static_cast<int64_t>(borrow);
         if (temp_diff >= 0) {
           diff.digits_.emplace_back(static_cast<uint32_t>(temp_diff));
@@ -656,23 +659,23 @@ BigInt BigInt::operator-(const BigInt& subtrahend) const {
       diff.positive_ = true;
       return diff;
     } else {
-      return -(subtrahend - *this);
+      return -(rhs - lhs);
     }
-  } else if (!positive_ && subtrahend.positive_) {
-    return -(abs(*this) + subtrahend);
-  } else if (positive_ && !subtrahend.positive_) {
-    return *this + abs(subtrahend);
-  } else {  // !positive_ && !subtrahend.positive_
-    return abs(subtrahend) - abs(*this);
+  } else if (!lhs.positive_ && rhs.positive_) {
+    return -(abs(lhs) + rhs);
+  } else if (lhs.positive_ && !rhs.positive_) {
+    return lhs + abs(rhs);
+  } else {  // !lhs.positive_ && !rhs.positive_
+    return abs(rhs) - abs(lhs);
   }
 }
 
-BigInt& BigInt::operator-=(const BigInt& subtrahend) {
-  if (subtrahend == 0) {
+BigInt& BigInt::operator-=(const BigInt& rhs) {
+  if (rhs == 0) {
     return *this;
   }
-  BigInt negated = subtrahend;
-  negated.positive_ = !subtrahend.positive_;
+  BigInt negated = rhs;
+  negated.positive_ = !rhs.positive_;
   return *this += negated;
 }
 
@@ -715,28 +718,28 @@ BigInt BigInt::operator--(int) {
   return old_value;
 }
 
-BigInt BigInt::operator*(const BigInt& multiplier) const {
-  if (*this == 0 || multiplier == 0) {
+BigInt operator*(const BigInt& lhs, const BigInt& rhs) {
+  if (lhs == 0 || rhs == 0) {
     return BigInt();
   }
 
   BigInt product;
-  const size_t max_size = std::max(digits_.size(), multiplier.digits_.size());
+  const size_t max_size = std::max(lhs.digits_.size(), rhs.digits_.size());
 
   if (max_size >= kToom3Threshold) {
-    product = multiplyToom3(multiplier);
+    product = lhs.multiplyToom3(rhs);
   } else if (max_size >= kKaratsubaThreshold) {
-    product = multiplyKaratsuba(multiplier);
+    product = lhs.multiplyKaratsuba(rhs);
   } else {
-    product = multiplySchoolbook(multiplier);
+    product = lhs.multiplySchoolbook(rhs);
   }
 
-  product.positive_ = (positive_ == multiplier.positive_);
+  product.positive_ = (lhs.positive_ == rhs.positive_);
   return product;
 }
 
-BigInt& BigInt::operator*=(const BigInt& multiplier) {
-  *this = *this * multiplier;
+BigInt& BigInt::operator*=(const BigInt& rhs) {
+  *this = *this * rhs;
   return *this;
 }
 
@@ -815,290 +818,22 @@ std::pair<BigInt, BigInt> BigInt::divmodKnuth(const BigInt& divisor, size_t m, s
   return {std::move(quotient), std::move(remainder)};
 }
 
-BigInt BigInt::operator/(const BigInt& divisor) const {
-  return divmod(*this, divisor).first;
+BigInt operator/(const BigInt& lhs, const BigInt& rhs) {
+  return divmod(lhs, rhs).first;
 }
 
-BigInt& BigInt::operator/=(const BigInt& divisor) {
-  *this = divmod(*this, divisor).first;
+BigInt& BigInt::operator/=(const BigInt& rhs) {
+  *this = divmod(*this, rhs).first;
   return *this;
 }
 
-BigInt BigInt::operator%(const BigInt& divisor) const {
-  return divmod(*this, divisor).second;
+BigInt operator%(const BigInt& lhs, const BigInt& rhs) {
+  return divmod(lhs, rhs).second;
 }
 
-BigInt& BigInt::operator%=(const BigInt& divisor) {
-  *this = divmod(*this, divisor).second;
+BigInt& BigInt::operator%=(const BigInt& rhs) {
+  *this = divmod(*this, rhs).second;
   return *this;
-}
-
-// ============================================================================
-// Mathematical Functions
-// ============================================================================
-
-BigInt pow(const BigInt& base, const BigInt& exponent) {
-  if (!exponent.positive_) {
-    return BigInt(0);
-  }
-
-  BigInt result(1);
-  result.digits_.reserve(base.digits_.size() * static_cast<size_t>(exponent));
-
-  for (size_t bit_idx = exponent.bitLength() - 1; bit_idx > 0; --bit_idx) {
-    if (exponent.digits_[bit_idx >> kDigitShift] & (1U << (bit_idx & kBitIndexMask))) {
-      result *= base;
-    }
-    result *= result;
-  }
-
-  if (exponent % 2 != 0) {
-    result *= base;
-  }
-
-  if (!base.positive_) {
-    result.positive_ = (exponent % 2 == 0);
-  }
-
-  return result;
-}
-
-size_t log2(const BigInt& value) {
-  if (value <= 0) {
-    throw std::domain_error("log2 undefined for non-positive values");
-  }
-  return value.bitLength() - 1;
-}
-
-std::pair<BigInt, BigInt> divmod(const BigInt& dividend, const BigInt& divisor) {
-  if (divisor == 0) {
-    throw std::domain_error("Division by zero");
-  }
-
-  const bool quotient_positive = (dividend.positive_ == divisor.positive_);
-
-  // Compare magnitudes to handle trivial cases
-  const int cmp = dividend.compareMagnitude(divisor);
-  if (cmp < 0) {
-    // |dividend| < |divisor| → quotient = 0, remainder = dividend
-    BigInt remainder = dividend;
-    remainder.positive_ = dividend.positive_ || (remainder == 0);
-    return {BigInt(), remainder};
-  }
-  if (cmp == 0) {
-    // |dividend| == |divisor| → quotient = ±1, remainder = 0
-    BigInt quotient(1);
-    quotient.positive_ = quotient_positive;
-    return {quotient, BigInt()};
-  }
-
-  const size_t m = dividend.digits_.size();
-  const size_t n = divisor.digits_.size();
-
-  // Fast path: single-word divisor
-  if (n == 1) {
-    return dividend.divmodSingleWord(divisor.digits_[0], quotient_positive);
-  }
-
-  // Knuth's Algorithm D (TAOCP Vol 2, Section 4.3.1)
-  return dividend.divmodKnuth(divisor, m, n, quotient_positive);
-}
-
-BigInt powmod(const BigInt& base, const BigInt& exponent, const BigInt& divisor) {
-  if (divisor == 0) {
-    throw std::domain_error("Modular exponentiation with zero divisor");
-  }
-
-  // Handle edge cases
-  if (exponent == 0) {
-    return BigInt(1);
-  }
-  if (base == 0) {
-    return BigInt(0);
-  }
-
-  // Algorithm selection criteria:
-  // - Montgomery: odd modulus, >= 8 words (256 bits), exponent >= 16 bits
-  // - Barrett: any modulus, >= 4 words (128 bits), exponent >= 64 bits
-  // - Standard: fallback for small numbers
-  const size_t mod_words = divisor.digits_.size();
-  const size_t exp_bits = exponent.bitLength();
-  const bool is_odd_modulus = divisor.digits_[0] & 1;
-
-  const bool use_montgomery = is_odd_modulus && mod_words >= 8 && exp_bits >= 16;
-  const bool use_barrett = !use_montgomery && mod_words >= 4 && exp_bits >= 64;
-
-  if (use_montgomery) {
-    // Montgomery CIOS (for large odd moduli)
-    internal::MontgomeryContext mont(divisor.digits_);
-    const size_t k = mont.wordCount();
-
-    // Convert base to Montgomery form
-    internal::MontgomeryContext::WordVec base_vec(k, 0);
-    BigInt base_mod = base % divisor;
-    std::ranges::copy(base_mod.digits_, base_vec.begin());
-    auto base_mont = mont.toMontgomery(base_vec);
-
-    // Initialize result to 1 in Montgomery form
-    internal::MontgomeryContext::WordVec one_vec(k, 0);
-    one_vec[0] = 1;
-    auto result_mont = mont.toMontgomery(one_vec);
-
-    // Square-and-multiply in Montgomery form (left-to-right binary method)
-    internal::MontgomeryContext::WordVec temp(k);
-
-    for (size_t i = 0; i < exp_bits; ++i) {
-      const size_t bit_idx = exp_bits - 1 - i;
-
-      // Square
-      mont.square(result_mont, temp);
-      std::swap(result_mont, temp);
-
-      // Multiply if bit is set
-      if (exponent.testBit(bit_idx)) {
-        mont.multiply(result_mont, base_mont, temp);
-        std::swap(result_mont, temp);
-      }
-    }
-
-    // Convert back from Montgomery form
-    auto result_vec = mont.fromMontgomery(result_mont);
-
-    // Build result BigInt
-    BigInt result;
-    result.digits_ = std::move(result_vec);
-    result.deleteZeroHighOrderDigit();
-    return result;
-  }
-
-  if (use_barrett) {
-    // Barrett reduction (for even moduli or medium-sized odd moduli)
-    internal::BarrettContext barrett(divisor);
-    BigInt result(1);
-    BigInt b = barrett.reduce(base);
-
-    for (size_t i = 0; i < exp_bits; ++i) {
-      const size_t bit_idx = exp_bits - 1 - i;
-      result = barrett.mulmod(result, result);
-      if (exponent.testBit(bit_idx)) {
-        result = barrett.mulmod(result, b);
-      }
-    }
-    return result;
-  }
-
-  // Standard square-and-multiply (for small numbers)
-  BigInt result(1);
-  BigInt b = base % divisor;
-
-  for (size_t i = 0; i < exp_bits; ++i) {
-    const size_t bit_idx = exp_bits - 1 - i;
-    result = (result * result) % divisor;
-    if (exponent.testBit(bit_idx)) {
-      result = (result * b) % divisor;
-    }
-  }
-  return result;
-}
-
-BigInt inversemod(BigInt value, const BigInt& modulus) {
-  if (modulus == 0) {
-    throw std::domain_error("Modular inverse with zero divisor");
-  }
-  if (!isCoprime(value, modulus)) {
-    throw std::domain_error("Modular inverse does not exist (numbers not coprime)");
-  }
-
-  BigInt mod_copy(modulus);
-  BigInt quotient;
-  BigInt x0(0);
-  BigInt x1(1);
-  BigInt temp;
-
-  while (value > 1) {
-    quotient = value / mod_copy;
-    temp = mod_copy;
-    mod_copy = value % mod_copy;
-    value = temp;
-    temp = x0;
-    x0 = x1 - (quotient * x0);
-    x1 = temp;
-  }
-
-  if (!x1.positive_) {
-    x1 += modulus;
-  }
-
-  return x1;
-}
-
-bool congruencemod(const BigInt& a, const BigInt& b, const BigInt& modulus) {
-  if (modulus == 0) {
-    throw std::domain_error("Congruence check with zero divisor");
-  }
-
-  BigInt rem_a = a % modulus;
-  BigInt rem_b = b % modulus;
-
-  while (!rem_a.positive_) {
-    rem_a += modulus;
-  }
-  while (rem_a > modulus) {
-    rem_a -= modulus;
-  }
-  while (!rem_b.positive_) {
-    rem_b += modulus;
-  }
-  while (rem_b > modulus) {
-    rem_b -= modulus;
-  }
-
-  return rem_a == rem_b;
-}
-
-bool isCoprime(const BigInt& a, const BigInt& b) {
-  return gcd(a, b) == 1;
-}
-
-int8_t symbolJacobi(BigInt a, BigInt n) {
-  if (!isCoprime(a, n)) {
-    return 0;
-  }
-
-  int8_t result = 1;
-  BigInt temp;
-
-  if (!a.positive_) {
-    a.positive_ = true;
-    if (n % 4 == 3) {
-      result = -result;
-    }
-  }
-
-  while (a) {
-    // Factor out powers of 2 using trailingZeros() instead of loop
-    const size_t twos_count = a.trailingZeros();
-    if (twos_count > 0) {
-      a >>= twos_count;
-    }
-
-    if (twos_count % 2) {
-      uint32_t n_mod_8 = n % 8;
-      if (n_mod_8 == 3 || n_mod_8 == 5) {
-        result = -result;
-      }
-    }
-
-    if (a % 4 == 3 && n % 4 == 3) {
-      result = -result;
-    }
-
-    temp = a;
-    a = n % temp;
-    n = temp;
-  }
-
-  return result;
 }
 
 // ============================================================================
@@ -1214,10 +949,6 @@ BigInt& BigInt::operator^=(const BigInt& rhs) {
   return *this;
 }
 
-// ============================================================================
-// Shift Operators
-// ============================================================================
-
 BigInt BigInt::operator<<(size_t shift) const {
   if (!shift || digits_.empty() || !(*this)) {
     return *this;
@@ -1310,23 +1041,6 @@ BigInt BigInt::rightCircularShift(size_t shift) const {
 // ============================================================================
 // Comparison Operators
 // ============================================================================
-
-bool BigInt::operator!() const noexcept {
-  for (const auto& digit : digits_) {
-    if (digit != 0) {
-      return false;
-    }
-  }
-  return true;
-}
-
-bool BigInt::operator&&(const BigInt& rhs) const noexcept {
-  return static_cast<bool>(*this) && static_cast<bool>(rhs);
-}
-
-bool BigInt::operator||(const BigInt& rhs) const noexcept {
-  return static_cast<bool>(*this) || static_cast<bool>(rhs);
-}
 
 std::strong_ordering BigInt::operator<=>(const BigInt& rhs) const noexcept {
   // Direct zero check to avoid recursion (don't use == 0 here)
@@ -1466,6 +1180,31 @@ int BigInt::compareMagnitude(const BigInt& other) const noexcept {
   return 0;
 }
 
+// ============================================================================
+// Logical Operators
+// ============================================================================
+
+bool BigInt::operator!() const noexcept {
+  for (const auto& digit : digits_) {
+    if (digit != 0) {
+      return false;
+    }
+  }
+  return true;
+}
+
+bool BigInt::operator&&(const BigInt& rhs) const noexcept {
+  return static_cast<bool>(*this) && static_cast<bool>(rhs);
+}
+
+bool BigInt::operator||(const BigInt& rhs) const noexcept {
+  return static_cast<bool>(*this) || static_cast<bool>(rhs);
+}
+
+// ============================================================================
+// Mathematical Functions
+// ============================================================================
+
 BigInt abs(const BigInt& value) {
   BigInt result(value);
   result.positive_ = true;
@@ -1534,22 +1273,277 @@ BigInt lcm(const BigInt& a, const BigInt& b) {
   return (a * b) / gcd(a, b);
 }
 
-const BigInt& max(const BigInt& a, const BigInt& b) noexcept {
-  return a > b ? a : b;
+BigInt pow(const BigInt& base, const BigInt& exponent) {
+  if (!exponent.positive_) {
+    return BigInt(0);
+  }
+
+  BigInt result(1);
+  result.digits_.reserve(base.digits_.size() * static_cast<size_t>(exponent));
+
+  for (size_t bit_idx = exponent.bitLength() - 1; bit_idx > 0; --bit_idx) {
+    if (exponent.digits_[bit_idx >> kDigitShift] & (1U << (bit_idx & kBitIndexMask))) {
+      result *= base;
+    }
+    result *= result;
+  }
+
+  if (exponent % 2 != 0) {
+    result *= base;
+  }
+
+  if (!base.positive_) {
+    result.positive_ = (exponent % 2 == 0);
+  }
+
+  return result;
 }
 
-const BigInt& min(const BigInt& a, const BigInt& b) noexcept {
-  return a < b ? a : b;
+size_t log2(const BigInt& value) {
+  if (value <= 0) {
+    throw std::domain_error("log2 undefined for non-positive values");
+  }
+  return value.bitLength() - 1;
 }
 
-void swap(BigInt& lhs, BigInt& rhs) noexcept {
-  std::swap(lhs.positive_, rhs.positive_);
-  std::swap(lhs.digits_, rhs.digits_);
+std::pair<BigInt, BigInt> divmod(const BigInt& dividend, const BigInt& divisor) {
+  if (divisor == 0) {
+    throw std::domain_error("Division by zero");
+  }
+
+  const bool quotient_positive = (dividend.positive_ == divisor.positive_);
+
+  // Compare magnitudes to handle trivial cases
+  const int cmp = dividend.compareMagnitude(divisor);
+  if (cmp < 0) {
+    // |dividend| < |divisor| → quotient = 0, remainder = dividend
+    BigInt remainder = dividend;
+    remainder.positive_ = dividend.positive_ || (remainder == 0);
+    return {BigInt(), remainder};
+  }
+  if (cmp == 0) {
+    // |dividend| == |divisor| → quotient = ±1, remainder = 0
+    BigInt quotient(1);
+    quotient.positive_ = quotient_positive;
+    return {quotient, BigInt()};
+  }
+
+  const size_t m = dividend.digits_.size();
+  const size_t n = divisor.digits_.size();
+
+  // Fast path: single-word divisor
+  if (n == 1) {
+    return dividend.divmodSingleWord(divisor.digits_[0], quotient_positive);
+  }
+
+  // Knuth's Algorithm D (TAOCP Vol 2, Section 4.3.1)
+  return dividend.divmodKnuth(divisor, m, n, quotient_positive);
+}
+
+// ============================================================================
+// Modular Arithmetic
+// ============================================================================
+
+BigInt powmod(const BigInt& base, const BigInt& exponent, const BigInt& modulus) {
+  if (modulus == 0) {
+    throw std::domain_error("Modular exponentiation with zero modulus");
+  }
+
+  // Handle edge cases
+  if (exponent == 0) {
+    return BigInt(1);
+  }
+  if (base == 0) {
+    return BigInt(0);
+  }
+
+  // Algorithm selection criteria:
+  // - Montgomery: odd modulus, >= 8 words (256 bits), exponent >= 16 bits
+  // - Barrett: any modulus, >= 4 words (128 bits), exponent >= 64 bits
+  // - Standard: fallback for small numbers
+  const size_t mod_words = modulus.digits_.size();
+  const size_t exp_bits = exponent.bitLength();
+  const bool is_odd_modulus = modulus.digits_[0] & 1;
+
+  const bool use_montgomery = is_odd_modulus && mod_words >= 8 && exp_bits >= 16;
+  const bool use_barrett = !use_montgomery && mod_words >= 4 && exp_bits >= 64;
+
+  if (use_montgomery) {
+    // Montgomery CIOS (for large odd moduli)
+    internal::MontgomeryContext mont(modulus.digits_);
+    const size_t k = mont.wordCount();
+
+    // Convert base to Montgomery form
+    internal::MontgomeryContext::WordVec base_vec(k, 0);
+    BigInt base_mod = base % modulus;
+    std::ranges::copy(base_mod.digits_, base_vec.begin());
+    auto base_mont = mont.toMontgomery(base_vec);
+
+    // Initialize result to 1 in Montgomery form
+    internal::MontgomeryContext::WordVec one_vec(k, 0);
+    one_vec[0] = 1;
+    auto result_mont = mont.toMontgomery(one_vec);
+
+    // Square-and-multiply in Montgomery form (left-to-right binary method)
+    internal::MontgomeryContext::WordVec temp(k);
+
+    for (size_t i = 0; i < exp_bits; ++i) {
+      const size_t bit_idx = exp_bits - 1 - i;
+
+      // Square
+      mont.square(result_mont, temp);
+      std::swap(result_mont, temp);
+
+      // Multiply if bit is set
+      if (exponent.testBit(bit_idx)) {
+        mont.multiply(result_mont, base_mont, temp);
+        std::swap(result_mont, temp);
+      }
+    }
+
+    // Convert back from Montgomery form
+    auto result_vec = mont.fromMontgomery(result_mont);
+
+    // Build result BigInt
+    BigInt result;
+    result.digits_ = std::move(result_vec);
+    result.deleteZeroHighOrderDigit();
+    return result;
+  }
+
+  if (use_barrett) {
+    // Barrett reduction (for even moduli or medium-sized odd moduli)
+    internal::BarrettContext barrett(modulus);
+    BigInt result(1);
+    BigInt b = barrett.reduce(base);
+
+    for (size_t i = 0; i < exp_bits; ++i) {
+      const size_t bit_idx = exp_bits - 1 - i;
+      result = barrett.mulmod(result, result);
+      if (exponent.testBit(bit_idx)) {
+        result = barrett.mulmod(result, b);
+      }
+    }
+    return result;
+  }
+
+  // Standard square-and-multiply (for small numbers)
+  BigInt result(1);
+  BigInt b = base % modulus;
+
+  for (size_t i = 0; i < exp_bits; ++i) {
+    const size_t bit_idx = exp_bits - 1 - i;
+    result = (result * result) % modulus;
+    if (exponent.testBit(bit_idx)) {
+      result = (result * b) % modulus;
+    }
+  }
+  return result;
+}
+
+BigInt inversemod(BigInt value, const BigInt& modulus) {
+  if (modulus == 0) {
+    throw std::domain_error("Modular inverse with zero modulus");
+  }
+  if (!isCoprime(value, modulus)) {
+    throw std::domain_error("Modular inverse does not exist (numbers not coprime)");
+  }
+
+  BigInt mod_copy(modulus);
+  BigInt quotient;
+  BigInt x0(0);
+  BigInt x1(1);
+  BigInt temp;
+
+  while (value > 1) {
+    quotient = value / mod_copy;
+    temp = mod_copy;
+    mod_copy = value % mod_copy;
+    value = temp;
+    temp = x0;
+    x0 = x1 - (quotient * x0);
+    x1 = temp;
+  }
+
+  if (!x1.positive_) {
+    x1 += modulus;
+  }
+
+  return x1;
+}
+
+bool congruencemod(const BigInt& a, const BigInt& b, const BigInt& modulus) {
+  if (modulus == 0) {
+    throw std::domain_error("Congruence check with zero modulus");
+  }
+
+  BigInt rem_a = a % modulus;
+  BigInt rem_b = b % modulus;
+
+  while (!rem_a.positive_) {
+    rem_a += modulus;
+  }
+  while (rem_a > modulus) {
+    rem_a -= modulus;
+  }
+  while (!rem_b.positive_) {
+    rem_b += modulus;
+  }
+  while (rem_b > modulus) {
+    rem_b -= modulus;
+  }
+
+  return rem_a == rem_b;
 }
 
 // ============================================================================
 // Number Theory
 // ============================================================================
+
+bool isCoprime(const BigInt& a, const BigInt& b) {
+  return gcd(a, b) == 1;
+}
+
+int8_t symbolJacobi(BigInt a, BigInt n) {
+  if (!isCoprime(a, n)) {
+    return 0;
+  }
+
+  int8_t result = 1;
+  BigInt temp;
+
+  if (!a.positive_) {
+    a.positive_ = true;
+    if (n % 4 == 3) {
+      result = -result;
+    }
+  }
+
+  while (a) {
+    // Factor out powers of 2 using trailingZeros() instead of loop
+    const size_t twos_count = a.trailingZeros();
+    if (twos_count > 0) {
+      a >>= twos_count;
+    }
+
+    if (twos_count % 2) {
+      uint32_t n_mod_8 = n % 8;
+      if (n_mod_8 == 3 || n_mod_8 == 5) {
+        result = -result;
+      }
+    }
+
+    if (a % 4 == 3 && n % 4 == 3) {
+      result = -result;
+    }
+
+    temp = a;
+    a = n % temp;
+    n = temp;
+  }
+
+  return result;
+}
 
 namespace {
 
@@ -1759,71 +1753,126 @@ BigInt BigInt::nextPrime() const {
 }
 
 // ============================================================================
-// I/O Operators
+// Bit Queries & Manipulation
 // ============================================================================
 
-std::ostream& operator<<(std::ostream& out, const BigInt& value) {
-  // Respect stream format flags like std::hex, std::uppercase, std::showbase
-  const auto flags = out.flags();
-  const auto base_field = flags & std::ios::basefield;
-
-  // Determine base from stream flags
-  uint8_t base = kBaseDecimal;
-  if (base_field == std::ios::hex) {
-    base = kBaseHexadecimal;
-  } else if (base_field == std::ios::oct) {
-    // Octal not supported, fall back to decimal
-    base = kBaseDecimal;
+size_t BigInt::bitLength() const noexcept {
+  if (!(*this)) {
+    return 1;
   }
 
-  // Handle zero specially
-  if (value == 0) {
-    if ((flags & std::ios::showbase) && base == kBaseHexadecimal) {
-      out << (flags & std::ios::uppercase ? "0X0" : "0x0");
+  size_t len = (digits_.size() - 1) * sizeof(uint32_t) * 8;
+  uint32_t high_digit = digits_.back();
+  uint8_t high_bits = 0;
+
+  while (high_digit) {
+    high_digit >>= 1;
+    ++high_bits;
+  }
+
+  return len + high_bits;
+}
+
+size_t BigInt::byteLength() const noexcept {
+  if (!(*this)) {
+    return 1;
+  }
+
+  size_t len = (digits_.size() - 1) * sizeof(uint32_t);
+  uint32_t high_digit = digits_.back();
+  uint8_t high_bytes = 0;
+
+  while (high_digit) {
+    high_digit >>= 8;
+    ++high_bytes;
+  }
+
+  return len + high_bytes;
+}
+
+bool BigInt::testBit(size_t n) const noexcept {
+  const size_t word_idx = n >> kDigitShift;
+  if (word_idx >= digits_.size()) {
+    return false;
+  }
+  const size_t bit_idx = n & kBitIndexMask;
+  return (digits_[word_idx] >> bit_idx) & 1U;
+}
+
+size_t BigInt::trailingZeros() const noexcept {
+  // Zero has no trailing zeros by convention
+  if (digits_.size() == 1 && digits_[0] == 0) {
+    return 0;
+  }
+
+  size_t count = 0;
+  for (size_t i = 0; i < digits_.size(); ++i) {
+    if (digits_[i] == 0) {
+      count += kBitsPerDigit;
     } else {
-      out << '0';
-    }
-    return out;
-  }
-
-  // Build the output string
-  std::string str = value.toStdString(base);
-
-  // Apply uppercase if requested (for hex)
-  if ((flags & std::ios::uppercase) && base == kBaseHexadecimal) {
-    for (char& c : str) {
-      if (c >= 'a' && c <= 'f') {
-        c = static_cast<char>(c - 'a' + 'A');
-      }
+      // Use compiler intrinsic for trailing zeros in a word
+#if defined(_MSC_VER)
+      unsigned long idx;
+      _BitScanForward(&idx, digits_[i]);
+      count += idx;
+#else
+      count += static_cast<size_t>(__builtin_ctz(digits_[i]));
+#endif
+      break;
     }
   }
-
-  // Add base prefix if showbase is set
-  if (flags & std::ios::showbase) {
-    if (base == kBaseHexadecimal) {
-      const bool is_negative = !str.empty() && str[0] == '-';
-      const std::string prefix = (flags & std::ios::uppercase) ? "0X" : "0x";
-      if (is_negative) {
-        str.insert(1, prefix);  // Insert after minus sign
-      } else {
-        str.insert(0, prefix);
-      }
-    }
-  }
-
-  out << str;
-  return out;
+  return count;
 }
 
-std::istream& operator>>(std::istream& in, BigInt& value) {
-  std::string str;
-  in >> str;
-  value = BigInt(str);
-  return in;
+size_t BigInt::popCount() const noexcept {
+  size_t count = 0;
+  for (const auto& digit : digits_) {
+    count += static_cast<size_t>(std::popcount(digit));
+  }
+  return count;
+}
+
+BigInt& BigInt::setBit(size_t n) {
+  const size_t word_idx = n >> kDigitShift;
+  const size_t bit_idx = n & kBitIndexMask;
+
+  // Extend digits if necessary
+  if (word_idx >= digits_.size()) {
+    digits_.resize(word_idx + 1, 0);
+  }
+
+  digits_[word_idx] |= (1U << bit_idx);
+  return *this;
+}
+
+BigInt& BigInt::clearBit(size_t n) {
+  const size_t word_idx = n >> kDigitShift;
+  if (word_idx >= digits_.size()) {
+    return *this;  // Bit is already 0 (beyond current size)
+  }
+
+  const size_t bit_idx = n & kBitIndexMask;
+  digits_[word_idx] &= ~(1U << bit_idx);
+  deleteZeroHighOrderDigit();
+  return *this;
+}
+
+BigInt& BigInt::flipBit(size_t n) {
+  const size_t word_idx = n >> kDigitShift;
+  const size_t bit_idx = n & kBitIndexMask;
+
+  // Extend digits if necessary
+  if (word_idx >= digits_.size()) {
+    digits_.resize(word_idx + 1, 0);
+  }
+
+  digits_[word_idx] ^= (1U << bit_idx);
+  deleteZeroHighOrderDigit();
+  return *this;
 }
 
 // ============================================================================
-// Conversion Functions
+// Conversion
 // ============================================================================
 
 std::string BigInt::toStdString(const uint8_t base) const {
@@ -1918,123 +1967,85 @@ BigInt::operator bool() const noexcept {
   return false;
 }
 
-size_t BigInt::bitLength() const noexcept {
-  if (!(*this)) {
-    return 1;
+// ============================================================================
+// Stream I/O
+// ============================================================================
+
+std::ostream& operator<<(std::ostream& out, const BigInt& value) {
+  // Respect stream format flags like std::hex, std::uppercase, std::showbase
+  const auto flags = out.flags();
+  const auto base_field = flags & std::ios::basefield;
+
+  // Determine base from stream flags
+  uint8_t base = kBaseDecimal;
+  if (base_field == std::ios::hex) {
+    base = kBaseHexadecimal;
+  } else if (base_field == std::ios::oct) {
+    // Octal not supported, fall back to decimal
+    base = kBaseDecimal;
   }
 
-  size_t len = (digits_.size() - 1) * sizeof(uint32_t) * 8;
-  uint32_t high_digit = digits_.back();
-  uint8_t high_bits = 0;
-
-  while (high_digit) {
-    high_digit >>= 1;
-    ++high_bits;
-  }
-
-  return len + high_bits;
-}
-
-size_t BigInt::byteLength() const noexcept {
-  if (!(*this)) {
-    return 1;
-  }
-
-  size_t len = (digits_.size() - 1) * sizeof(uint32_t);
-  uint32_t high_digit = digits_.back();
-  uint8_t high_bytes = 0;
-
-  while (high_digit) {
-    high_digit >>= 8;
-    ++high_bytes;
-  }
-
-  return len + high_bytes;
-}
-
-bool BigInt::testBit(size_t n) const noexcept {
-  const size_t word_idx = n >> kDigitShift;
-  if (word_idx >= digits_.size()) {
-    return false;
-  }
-  const size_t bit_idx = n & kBitIndexMask;
-  return (digits_[word_idx] >> bit_idx) & 1U;
-}
-
-size_t BigInt::trailingZeros() const noexcept {
-  // Zero has no trailing zeros by convention
-  if (digits_.size() == 1 && digits_[0] == 0) {
-    return 0;
-  }
-
-  size_t count = 0;
-  for (size_t i = 0; i < digits_.size(); ++i) {
-    if (digits_[i] == 0) {
-      count += kBitsPerDigit;
+  // Handle zero specially
+  if (value == 0) {
+    if ((flags & std::ios::showbase) && base == kBaseHexadecimal) {
+      out << (flags & std::ios::uppercase ? "0X0" : "0x0");
     } else {
-      // Use compiler intrinsic for trailing zeros in a word
-#if defined(_MSC_VER)
-      unsigned long idx;
-      _BitScanForward(&idx, digits_[i]);
-      count += idx;
-#else
-      count += static_cast<size_t>(__builtin_ctz(digits_[i]));
-#endif
-      break;
+      out << '0';
+    }
+    return out;
+  }
+
+  // Build the output string
+  std::string str = value.toStdString(base);
+
+  // Apply uppercase if requested (for hex)
+  if ((flags & std::ios::uppercase) && base == kBaseHexadecimal) {
+    for (char& c : str) {
+      if (c >= 'a' && c <= 'f') {
+        c = static_cast<char>(c - 'a' + 'A');
+      }
     }
   }
-  return count;
+
+  // Add base prefix if showbase is set
+  if (flags & std::ios::showbase) {
+    if (base == kBaseHexadecimal) {
+      const bool is_negative = !str.empty() && str[0] == '-';
+      const std::string prefix = (flags & std::ios::uppercase) ? "0X" : "0x";
+      if (is_negative) {
+        str.insert(1, prefix);  // Insert after minus sign
+      } else {
+        str.insert(0, prefix);
+      }
+    }
+  }
+
+  out << str;
+  return out;
 }
 
-size_t BigInt::popCount() const noexcept {
-  size_t count = 0;
-  for (const auto& digit : digits_) {
-    count += static_cast<size_t>(std::popcount(digit));
-  }
-  return count;
+std::istream& operator>>(std::istream& in, BigInt& value) {
+  std::string str;
+  in >> str;
+  value = BigInt(str);
+  return in;
 }
 
 // ============================================================================
-// Bit Manipulation
+// Utility
 // ============================================================================
 
-BigInt& BigInt::setBit(size_t n) {
-  const size_t word_idx = n >> kDigitShift;
-  const size_t bit_idx = n & kBitIndexMask;
-
-  // Extend digits if necessary
-  if (word_idx >= digits_.size()) {
-    digits_.resize(word_idx + 1, 0);
-  }
-
-  digits_[word_idx] |= (1U << bit_idx);
-  return *this;
+const BigInt& max(const BigInt& a, const BigInt& b) noexcept {
+  return a > b ? a : b;
 }
 
-BigInt& BigInt::clearBit(size_t n) {
-  const size_t word_idx = n >> kDigitShift;
-  if (word_idx >= digits_.size()) {
-    return *this;  // Bit is already 0 (beyond current size)
-  }
-
-  const size_t bit_idx = n & kBitIndexMask;
-  digits_[word_idx] &= ~(1U << bit_idx);
-  deleteZeroHighOrderDigit();
-  return *this;
+const BigInt& min(const BigInt& a, const BigInt& b) noexcept {
+  return a < b ? a : b;
 }
 
-BigInt& BigInt::flipBit(size_t n) {
-  const size_t word_idx = n >> kDigitShift;
-  const size_t bit_idx = n & kBitIndexMask;
-
-  // Extend digits if necessary
-  if (word_idx >= digits_.size()) {
-    digits_.resize(word_idx + 1, 0);
-  }
-
-  digits_[word_idx] ^= (1U << bit_idx);
-  deleteZeroHighOrderDigit();
-  return *this;
+void swap(BigInt& lhs, BigInt& rhs) noexcept {
+  std::swap(lhs.positive_, rhs.positive_);
+  std::swap(lhs.digits_, rhs.digits_);
 }
 
 // ============================================================================

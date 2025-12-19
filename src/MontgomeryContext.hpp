@@ -9,9 +9,7 @@
 
 #include <bigint/BigInt.hpp>
 
-#include <algorithm>
 #include <cstdint>
-#include <ranges>
 #include <vector>
 
 namespace bigint::internal {
@@ -131,11 +129,11 @@ struct MontgomeryContext {
   void montgomeryReduce(WordVec& t) const;
   void extractResult(const WordVec& t, WordVec& result) const;
 
-  WordVec n_;                    ///< Modulus N
-  size_t k_;                     ///< Word count of N
-  Word n0_inv_;                  ///< -N^(-1) mod 2^32
-  WordVec r_squared_;            ///< R^2 mod N for conversion to Montgomery form
-  mutable WordVec scratch_;      ///< Scratch buffer for CIOS algorithm
+  WordVec n_;                ///< Modulus N
+  size_t k_;                 ///< Word count of N
+  Word n0_inv_;              ///< -N^(-1) mod 2^32
+  WordVec r_squared_;        ///< R^2 mod N for conversion to Montgomery form
+  mutable WordVec scratch_;  ///< Scratch buffer for CIOS algorithm
 };
 
 }  // namespace bigint::internal

@@ -6,7 +6,6 @@
 
 #include <bigint/Constants.hpp>
 
-#include <array>
 #include <compare>
 #include <concepts>
 #include <cstdint>
@@ -83,50 +82,25 @@ class BigInt {
 
   /// @name Arithmetic Operators
   /// @{
-  [[nodiscard]] BigInt operator+() const;                      ///< Unary plus
-  [[nodiscard]] BigInt operator+(const BigInt& addend) const;  ///< Addition
-  BigInt& operator+=(const BigInt& addend);                    ///< Addition assignment
-  BigInt& operator++();                                        ///< Pre-increment
-  BigInt operator++(int);                                      ///< Post-increment
 
-  [[nodiscard]] BigInt operator-() const;                          ///< Unary minus (negation)
-  [[nodiscard]] BigInt operator-(const BigInt& subtrahend) const;  ///< Subtraction
-  BigInt& operator-=(const BigInt& subtrahend);                    ///< Subtraction assignment
-  BigInt& operator--();                                            ///< Pre-decrement
-  BigInt operator--(int);                                          ///< Post-decrement
+  // Unary operators (members)
+  [[nodiscard]] BigInt operator+() const;  ///< Unary plus
+  [[nodiscard]] BigInt operator-() const;  ///< Unary minus (negation)
 
-  [[nodiscard]] BigInt operator*(const BigInt& multiplier) const;  ///< Multiplication
-  BigInt& operator*=(const BigInt& multiplier);                    ///< Multiplication assignment
+  // Increment/decrement (members)
+  BigInt& operator++();    ///< Pre-increment
+  BigInt operator++(int);  ///< Post-increment
+  BigInt& operator--();    ///< Pre-decrement
+  BigInt operator--(int);  ///< Post-decrement
 
-  /// @brief Integer division.
+  // Compound assignment (members)
+  BigInt& operator+=(const BigInt& rhs);  ///< Addition assignment
+  BigInt& operator-=(const BigInt& rhs);  ///< Subtraction assignment
+  BigInt& operator*=(const BigInt& rhs);  ///< Multiplication assignment
   /// @throws std::domain_error if divisor is zero.
-  [[nodiscard]] BigInt operator/(const BigInt& divisor) const;
-  /// @brief Division assignment.
+  BigInt& operator/=(const BigInt& rhs);  ///< Division assignment
   /// @throws std::domain_error if divisor is zero.
-  BigInt& operator/=(const BigInt& divisor);
-
-  /// @brief Modulo (remainder).
-  /// @throws std::domain_error if divisor is zero.
-  [[nodiscard]] BigInt operator%(const BigInt& divisor) const;
-
-  /// @brief Modulo assignment.
-  /// @throws std::domain_error if divisor is zero.
-  BigInt& operator%=(const BigInt& divisor);
-
-  /// @brief Arithmetic with integral types.
-  /// @details Optimized implementations for uint64_t/int64_t, smaller types cast up.
-  ///          For modulo, uses fast Horner's method for types <= 32 bits.
-  /// @{
-  template <std::integral T>
-  [[nodiscard]] BigInt operator+(T rhs) const;
-  template <std::integral T>
-  [[nodiscard]] BigInt operator-(T rhs) const;
-  template <std::integral T>
-  [[nodiscard]] BigInt operator*(T rhs) const;
-  template <std::integral T>
-  [[nodiscard]] BigInt operator/(T rhs) const;
-  template <std::integral T>
-  [[nodiscard]] T operator%(T rhs) const;
+  BigInt& operator%=(const BigInt& rhs);  ///< Modulo assignment
 
   template <std::integral T>
   BigInt& operator+=(T rhs);
@@ -138,47 +112,55 @@ class BigInt {
   BigInt& operator/=(T rhs);
   template <std::integral T>
   BigInt& operator%=(T rhs);
-  /// @}
-  /// @}
 
-  /// @name Mathematical Functions
+  // Binary arithmetic operators (friend functions for symmetry)
   /// @{
-
-  /// @brief Compute base raised to exponent.
-  /// @return base^exponent (0 if exponent is negative).
-  friend BigInt pow(const BigInt& base, const BigInt& exponent);
-
-  /// @brief Compute floor of log base 2.
-  /// @return floor(log2(value)).
-  /// @throws std::domain_error if value <= 0.
-  friend size_t log2(const BigInt& value);
-
-  /// @brief Compute quotient and remainder in one operation.
-  /// @param dividend The dividend.
-  /// @param divisor The divisor.
-  /// @return Pair of (quotient, remainder).
+  friend BigInt operator+(const BigInt& lhs, const BigInt& rhs);
+  friend BigInt operator-(const BigInt& lhs, const BigInt& rhs);
+  friend BigInt operator*(const BigInt& lhs, const BigInt& rhs);
   /// @throws std::domain_error if divisor is zero.
-  friend std::pair<BigInt, BigInt> divmod(const BigInt& dividend, const BigInt& divisor);
+  friend BigInt operator/(const BigInt& lhs, const BigInt& rhs);
+  /// @throws std::domain_error if divisor is zero.
+  friend BigInt operator%(const BigInt& lhs, const BigInt& rhs);
 
-  /// @brief Compute (base^exponent) mod modulus efficiently.
-  /// @throws std::domain_error if modulus is zero.
-  friend BigInt powmod(const BigInt& base, const BigInt& exponent, const BigInt& modulus);
+  /// @brief Arithmetic with integral types (BigInt op T).
+  /// @details Optimized implementations for uint64_t/int64_t, smaller types cast up.
+  /// @{
+  template <std::integral T>
+  friend BigInt operator+(const BigInt& lhs, T rhs);
+  template <std::integral T>
+  friend BigInt operator-(const BigInt& lhs, T rhs);
+  template <std::integral T>
+  friend BigInt operator*(const BigInt& lhs, T rhs);
+  template <std::integral T>
+  friend BigInt operator/(const BigInt& lhs, T rhs);
+  template <std::integral T>
+  friend T operator%(const BigInt& lhs, T rhs);
+  /// @}
 
-  /// @brief Compute modular multiplicative inverse.
-  /// @return x such that (value * x) mod modulus == 1.
-  /// @throws std::domain_error if modulus is zero or inverse doesn't exist.
-  friend BigInt inversemod(BigInt value, const BigInt& modulus);
-
-  /// @brief Check if a ≡ b (mod modulus).
-  /// @throws std::domain_error if modulus is zero.
-  friend bool congruencemod(const BigInt& a, const BigInt& b, const BigInt& modulus);
-
-  /// @brief Check if two numbers are coprime (gcd == 1).
-  friend bool isCoprime(const BigInt& a, const BigInt& b);
-
-  /// @brief Compute Jacobi symbol (a/n).
-  /// @return -1, 0, or 1 representing the Jacobi symbol.
-  friend int8_t symbolJacobi(BigInt a, BigInt n);
+  /// @brief Reverse arithmetic operators (T op BigInt).
+  /// @{
+  template <std::integral T>
+  friend BigInt operator+(T lhs, const BigInt& rhs) {
+    return rhs + lhs;
+  }
+  template <std::integral T>
+  friend BigInt operator-(T lhs, const BigInt& rhs) {
+    return BigInt(lhs) - rhs;
+  }
+  template <std::integral T>
+  friend BigInt operator*(T lhs, const BigInt& rhs) {
+    return rhs * lhs;
+  }
+  template <std::integral T>
+  friend BigInt operator/(T lhs, const BigInt& rhs) {
+    return BigInt(lhs) / rhs;
+  }
+  template <std::integral T>
+  friend T operator%(T lhs, const BigInt& rhs) {
+    return static_cast<T>(BigInt(lhs) % rhs);
+  }
+  /// @}
   /// @}
 
   /// @name Bitwise Operators
@@ -203,13 +185,6 @@ class BigInt {
   [[nodiscard]] BigInt rightCircularShift(size_t shift) const;
   /// @}
 
-  /// @name Logical Operators
-  /// @{
-  bool operator!() const noexcept;                    ///< Logical NOT (true if zero)
-  bool operator&&(const BigInt& rhs) const noexcept;  ///< Logical AND
-  bool operator||(const BigInt& rhs) const noexcept;  ///< Logical OR
-  /// @}
-
   /// @name Comparison Operators
   /// @{
   [[nodiscard]] std::strong_ordering operator<=>(const BigInt& rhs) const noexcept;
@@ -224,8 +199,16 @@ class BigInt {
   [[nodiscard]] bool operator==(T rhs) const noexcept;
   /// @}
 
-  /// @name Utility Functions
+  /// @name Logical Operators
   /// @{
+  [[nodiscard]] bool operator!() const noexcept;                    ///< Logical NOT (true if zero)
+  [[nodiscard]] bool operator&&(const BigInt& rhs) const noexcept;  ///< Logical AND
+  [[nodiscard]] bool operator||(const BigInt& rhs) const noexcept;  ///< Logical OR
+  /// @}
+
+  /// @name Mathematical Functions
+  /// @{
+
   /// @brief Compute absolute value.
   friend BigInt abs(const BigInt& value);
 
@@ -239,18 +222,51 @@ class BigInt {
   /// @brief Compute least common multiple.
   friend BigInt lcm(const BigInt& a, const BigInt& b);
 
-  /// @brief Return the larger of two values.
-  friend const BigInt& max(const BigInt& a, const BigInt& b) noexcept;
+  /// @brief Compute base raised to exponent.
+  /// @return base^exponent (0 if exponent is negative).
+  friend BigInt pow(const BigInt& base, const BigInt& exponent);
 
-  /// @brief Return the smaller of two values.
-  friend const BigInt& min(const BigInt& a, const BigInt& b) noexcept;
+  /// @brief Compute floor of log base 2.
+  /// @return floor(log2(value)).
+  /// @throws std::domain_error if value <= 0.
+  friend size_t log2(const BigInt& value);
 
-  /// @brief Swap two BigInt values.
-  friend void swap(BigInt& lhs, BigInt& rhs) noexcept;
+  /// @brief Compute quotient and remainder in one operation.
+  /// @param dividend The dividend.
+  /// @param divisor The divisor.
+  /// @return Pair of (quotient, remainder).
+  /// @throws std::domain_error if divisor is zero.
+  friend std::pair<BigInt, BigInt> divmod(const BigInt& dividend, const BigInt& divisor);
+  /// @}
+
+  /// @name Modular Arithmetic
+  /// @{
+
+  /// @brief Compute (base^exponent) mod modulus efficiently.
+  /// @details Uses Montgomery multiplication for large odd moduli,
+  ///          Barrett reduction for medium moduli, standard method otherwise.
+  /// @throws std::domain_error if modulus is zero.
+  friend BigInt powmod(const BigInt& base, const BigInt& exponent, const BigInt& modulus);
+
+  /// @brief Compute modular multiplicative inverse.
+  /// @return x such that (value * x) mod modulus == 1.
+  /// @throws std::domain_error if modulus is zero or inverse doesn't exist.
+  friend BigInt inversemod(BigInt value, const BigInt& modulus);
+
+  /// @brief Check if a ≡ b (mod modulus).
+  /// @throws std::domain_error if modulus is zero.
+  friend bool congruencemod(const BigInt& a, const BigInt& b, const BigInt& modulus);
   /// @}
 
   /// @name Number Theory
   /// @{
+
+  /// @brief Check if two numbers are coprime (gcd == 1).
+  friend bool isCoprime(const BigInt& a, const BigInt& b);
+
+  /// @brief Compute Jacobi symbol (a/n).
+  /// @return -1, 0, or 1 representing the Jacobi symbol.
+  friend int8_t symbolJacobi(BigInt a, BigInt n);
 
   /// @brief Test if value is prime using Miller-Rabin.
   /// @details For numbers < 3,215,031,751, uses deterministic witnesses (100% accurate).
@@ -279,13 +295,18 @@ class BigInt {
   /// @brief Find the next prime >= this value.
   /// @return Smallest prime >= *this.
   [[nodiscard]] BigInt nextPrime() const;
-
   /// @}
 
-  /// @name Stream I/O
+  /// @name Bit Queries & Manipulation
   /// @{
-  friend std::ostream& operator<<(std::ostream& out, const BigInt& value);
-  friend std::istream& operator>>(std::istream& in, BigInt& value);
+  [[nodiscard]] size_t bitLength() const noexcept;      ///< Number of bits (minimum 1 for zero)
+  [[nodiscard]] size_t byteLength() const noexcept;     ///< Number of bytes needed
+  [[nodiscard]] bool testBit(size_t n) const noexcept;  ///< Test if bit at position n is set
+  [[nodiscard]] size_t trailingZeros() const noexcept;  ///< Count trailing zero bits (0 for zero)
+  [[nodiscard]] size_t popCount() const noexcept;       ///< Count number of set bits (1s)
+  BigInt& setBit(size_t n);                             ///< Set bit at position n to 1
+  BigInt& clearBit(size_t n);                           ///< Clear bit at position n to 0
+  BigInt& flipBit(size_t n);                            ///< Toggle bit at position n
   /// @}
 
   /// @name Conversion
@@ -310,20 +331,23 @@ class BigInt {
   [[nodiscard]] explicit operator bool() const noexcept;  ///< True if non-zero
   /// @}
 
-  /// @name Queries
+  /// @name Stream I/O
   /// @{
-  [[nodiscard]] size_t bitLength() const noexcept;      ///< Number of bits (minimum 1 for zero)
-  [[nodiscard]] size_t byteLength() const noexcept;     ///< Number of bytes needed
-  [[nodiscard]] bool testBit(size_t n) const noexcept;  ///< Test if bit at position n is set
-  [[nodiscard]] size_t trailingZeros() const noexcept;  ///< Count trailing zero bits (0 for zero)
-  [[nodiscard]] size_t popCount() const noexcept;       ///< Count number of set bits (1s)
+  friend std::ostream& operator<<(std::ostream& out, const BigInt& value);
+  friend std::istream& operator>>(std::istream& in, BigInt& value);
   /// @}
 
-  /// @name Bit Manipulation
+  /// @name Utility
   /// @{
-  BigInt& setBit(size_t n);    ///< Set bit at position n to 1
-  BigInt& clearBit(size_t n);  ///< Clear bit at position n to 0
-  BigInt& flipBit(size_t n);   ///< Toggle bit at position n
+
+  /// @brief Return the larger of two values.
+  friend const BigInt& max(const BigInt& a, const BigInt& b) noexcept;
+
+  /// @brief Return the smaller of two values.
+  friend const BigInt& min(const BigInt& a, const BigInt& b) noexcept;
+
+  /// @brief Swap two BigInt values.
+  friend void swap(BigInt& lhs, BigInt& rhs) noexcept;
   /// @}
 
  private:
@@ -424,47 +448,47 @@ BigInt::operator T() const noexcept {
 }
 
 template <std::integral T>
-BigInt BigInt::operator+(T rhs) const {
+BigInt operator+(const BigInt& lhs, T rhs) {
   if constexpr (std::is_signed_v<T>) {
-    return addInt64(static_cast<int64_t>(rhs));
+    return lhs.addInt64(static_cast<int64_t>(rhs));
   } else {
-    return addUint64(static_cast<uint64_t>(rhs));
+    return lhs.addUint64(static_cast<uint64_t>(rhs));
   }
 }
 
 template <std::integral T>
-BigInt BigInt::operator-(T rhs) const {
+BigInt operator-(const BigInt& lhs, T rhs) {
   if constexpr (std::is_signed_v<T>) {
-    return subInt64(static_cast<int64_t>(rhs));
+    return lhs.subInt64(static_cast<int64_t>(rhs));
   } else {
-    return subUint64(static_cast<uint64_t>(rhs));
+    return lhs.subUint64(static_cast<uint64_t>(rhs));
   }
 }
 
 template <std::integral T>
-BigInt BigInt::operator*(T rhs) const {
+BigInt operator*(const BigInt& lhs, T rhs) {
   if constexpr (std::is_signed_v<T>) {
-    return mulInt64(static_cast<int64_t>(rhs));
+    return lhs.mulInt64(static_cast<int64_t>(rhs));
   } else {
-    return mulUint64(static_cast<uint64_t>(rhs));
+    return lhs.mulUint64(static_cast<uint64_t>(rhs));
   }
 }
 
 template <std::integral T>
-BigInt BigInt::operator/(T rhs) const {
+BigInt operator/(const BigInt& lhs, T rhs) {
   if constexpr (std::is_signed_v<T>) {
-    return divInt64(static_cast<int64_t>(rhs));
+    return lhs.divInt64(static_cast<int64_t>(rhs));
   } else {
-    return divUint64(static_cast<uint64_t>(rhs));
+    return lhs.divUint64(static_cast<uint64_t>(rhs));
   }
 }
 
 template <std::integral T>
-T BigInt::operator%(T rhs) const {
+T operator%(const BigInt& lhs, T rhs) {
   if constexpr (std::is_signed_v<T>) {
-    return static_cast<T>(modInt64(static_cast<int64_t>(rhs)));
+    return static_cast<T>(lhs.modInt64(static_cast<int64_t>(rhs)));
   } else {
-    return static_cast<T>(modUint64(static_cast<uint64_t>(rhs)));
+    return static_cast<T>(lhs.modUint64(static_cast<uint64_t>(rhs)));
   }
 }
 

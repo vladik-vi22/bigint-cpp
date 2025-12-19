@@ -5,6 +5,9 @@
 
 #include "MontgomeryContext.hpp"
 
+#include <algorithm>
+#include <ranges>
+
 namespace bigint::internal {
 
 void MontgomeryContext::multiply(const WordVec& a, const WordVec& b, WordVec& result) const {
@@ -80,7 +83,8 @@ BigInt MontgomeryContext::wordVecToBigInt(const WordVec& words) {
   return BigInt(std::span<const Word>(big_endian), true);
 }
 
-MontgomeryContext::WordVec MontgomeryContext::bigIntToWordVec(const BigInt& value, size_t target_size) {
+MontgomeryContext::WordVec MontgomeryContext::bigIntToWordVec(const BigInt& value,
+                                                              size_t target_size) {
   // Get bytes in big-endian order
   std::vector<uint8_t> bytes = static_cast<std::vector<uint8_t>>(value);
 

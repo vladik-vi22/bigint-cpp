@@ -78,13 +78,11 @@ struct BarrettContext {
    * @param b Second operand (should be < n).
    * @return (a * b) mod n.
    */
-  [[nodiscard]] BigInt mulmod(const BigInt& a, const BigInt& b) const {
-    return reduce(a * b);
-  }
+  [[nodiscard]] BigInt mulmod(const BigInt& a, const BigInt& b) const { return reduce(a * b); }
 
-  BigInt n_;     ///< The modulus
-  size_t k_;     ///< Bit length of modulus
-  BigInt mu_;    ///< Precomputed reciprocal: floor(2^(2k) / n)
+  BigInt n_;   ///< The modulus
+  size_t k_;   ///< Bit length of modulus
+  BigInt mu_;  ///< Precomputed reciprocal: floor(2^(2k) / n)
 };
 
 }  // namespace bigint::internal

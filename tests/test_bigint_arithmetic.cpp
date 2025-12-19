@@ -951,3 +951,39 @@ TEST_F(BigIntArithmeticTest, EdgeCaseIncrementDecrement) {
   ++boundary;
   EXPECT_EQ(boundary.toStdString(10), "4294967296");
 }
+
+TEST_F(BigIntArithmeticTest, ReverseOperators) {
+  BigInt a(100);
+
+  // Reverse addition (commutative)
+  EXPECT_EQ(5 + a, BigInt(105));
+  EXPECT_EQ(a + 5, BigInt(105));
+  EXPECT_EQ(5 + a, a + 5);
+
+  // Reverse subtraction (non-commutative)
+  EXPECT_EQ(200 - a, BigInt(100));
+  EXPECT_EQ(a - 50, BigInt(50));
+  EXPECT_EQ(50 - a, BigInt(-50));
+
+  // Reverse multiplication (commutative)
+  EXPECT_EQ(3 * a, BigInt(300));
+  EXPECT_EQ(a * 3, BigInt(300));
+  EXPECT_EQ(3 * a, a * 3);
+
+  // Reverse division (non-commutative)
+  EXPECT_EQ(1000 / a, BigInt(10));
+  EXPECT_EQ(a / 10, BigInt(10));
+
+  // Reverse modulo (non-commutative)
+  EXPECT_EQ(250 % a, 50);
+  EXPECT_EQ(a % 30, 10);
+
+  // With negative numbers
+  EXPECT_EQ(-5 + a, BigInt(95));
+  EXPECT_EQ(5 - a, BigInt(-95));
+  EXPECT_EQ(-3 * a, BigInt(-300));
+
+  // With different integral types
+  EXPECT_EQ(static_cast<int64_t>(1000000000000LL) + a, BigInt("1000000000100"));
+  EXPECT_EQ(static_cast<uint32_t>(50) * a, BigInt(5000));
+}
